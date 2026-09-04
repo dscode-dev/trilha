@@ -147,6 +147,50 @@ tell which live session belongs to the attacker.
 
 ---
 
+## Geography
+
+Established in PR-02.
+
+**42. PostGIS is the spatial source of truth.**
+A location lives in a `geography(Point, 4326)` column. No pair of `double` columns
+shadows it, and no derived copy is authoritative.
+
+**43. The API speaks WGS84 degrees.**
+`latitude` and `longitude`, in and out. Web Mercator is a rendering projection and
+never appears in the domain or on the wire.
+
+**44. Distance is metres, computed by PostGIS.**
+Metres are the canonical unit everywhere in the backend. Formatting — "850 m",
+"1.2 km" — is a presentation decision. Hand-rolled Haversine is not an acceptable
+substitute for a spatial query.
+
+**45. Coordinates are validated before they reach SQL.**
+PostGIS *coerces* an out-of-range coordinate rather than rejecting it: latitude 91
+is stored as 89, with only a notice. The application is therefore the enforcement
+point, not a convenience layer in front of one.
+
+**46. Map reads are bounded.**
+Every spatial query has a ceiling — a maximum radius, a maximum viewport, a maximum
+result count. An unbounded geographic query is a table scan wearing a viewport.
+
+**47. A Place carries no rating, safety score or trail count.**
+Those belong to domains that own them. A nullable column reserved for a future
+domain is an invitation to fill it with something fabricated.
+
+**48. A community Place belongs to the platform, not to its contributor.**
+`createdBy` is attribution, not ownership. It must never become a permission that
+blocks correction.
+
+**49. The map renderer is not a source of Places.**
+Mapbox draws what Trilha knows. A third-party POI has no provenance, no contributor
+and no lifecycle, and must not enter the domain as though it did.
+
+**50. Personal location is device-local and ephemeral.**
+A user's position centres their map and is then discarded. It is never persisted,
+never sent to Trilha's servers, and background location is never requested.
+
+---
+
 ## Engineering
 
 **20. UTC internally.**

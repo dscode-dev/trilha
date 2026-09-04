@@ -5,3 +5,4 @@
  * `../migrations`. PR-01 introduces the identity domain; no other domain exists yet.
  */
 export * from './identity.js';
+export * from './places.js';

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/application/auth_providers.dart';
 import '../../features/auth/application/auth_state.dart';
 import '../../features/auth/presentation/auth_routes.dart';
-import '../../features/auth/presentation/home_screen.dart';
+import '../../features/map/presentation/map_screen.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/auth/presentation/sign_up_screen.dart';
 import '../../features/profile/presentation/change_password_screen.dart';
@@ -69,7 +69,7 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AuthRoutes.homePath,
         name: AuthRoutes.homeName,
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) => const MapScreen(),
       ),
       GoRoute(
         path: AuthRoutes.profilePath,

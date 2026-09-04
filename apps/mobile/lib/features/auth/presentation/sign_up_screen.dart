@@ -9,7 +9,7 @@ import '../../../shared/widgets/async_action_button.dart';
 import '../../../shared/widgets/form_error_banner.dart';
 import '../../../shared/widgets/trilha_logo.dart';
 import '../application/auth_providers.dart';
-import '../domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 import 'auth_form_messages.dart';
 import 'auth_routes.dart';
 import 'auth_validators.dart';
@@ -76,14 +76,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           );
     } on Object catch (error) {
       if (!mounted) return;
-      final AuthFailure failure = AuthFailure.from(error);
+      final AppFailure failure = AppFailure.from(error);
 
       setState(() {
         _error = AuthFormMessages.forFailure(failure);
-        if (failure.kind == AuthFailureKind.emailAlreadyInUse) {
+        if (failure.kind == FailureKind.emailAlreadyInUse) {
           _emailConflict = 'That email is already registered';
         }
-        if (failure.kind == AuthFailureKind.usernameAlreadyInUse) {
+        if (failure.kind == FailureKind.usernameAlreadyInUse) {
           _usernameConflict = 'That username is taken';
         }
       });

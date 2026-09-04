@@ -44,10 +44,39 @@ describe('OpenAPI document', () => {
     );
   });
 
-  it('exposes no product-domain endpoints yet', () => {
-    /* PR-00 is forbidden from shipping domain surface (§38). */
-    const domainish = /(user|place|trail|review|rating|safety|event|suggestion)/i;
-    expect(Object.keys(document.paths).filter((p) => domainish.test(p))).toEqual([]);
+  /**
+   * Scope freeze.
+   *
+   * Each PR removes its own domain from this list as it ships it — identity in PR-01,
+   * places in PR-02 — and everything still frozen stays. The guard is what makes an
+   * accidentally-shipped route fail a build rather than pass review.
+   */
+  it('exposes no endpoints for domains that are still frozen', () => {
+    const frozen = /(trail|route|review|rating|safety|event|suggestion|feed|badge|follower)/i;
+    expect(Object.keys(document.paths).filter((path) => frozen.test(path))).toEqual([]);
+  });
+
+  it('documents the places domain introduced by PR-02', () => {
+    expect(Object.keys(document.paths)).toEqual(
+      expect.arrayContaining([
+        '/api/v1/places',
+        '/api/v1/places/map',
+        '/api/v1/places/nearby',
+        '/api/v1/places/search',
+        '/api/v1/places/categories',
+        '/api/v1/places/{id}',
+      ]),
+    );
+  });
+
+  it('documents the map query as able to reject a bad viewport', () => {
+    const responses = document.paths['/api/v1/places/map']?.get?.responses ?? {};
+    expect(Object.keys(responses)).toEqual(expect.arrayContaining(['200', '400']));
+  });
+
+  it('marks place creation as requiring a bearer token', () => {
+    const security = document.paths['/api/v1/places']?.post?.security ?? [];
+    expect(JSON.stringify(security)).toMatch(/bearer/i);
   });
 
   it('does not expose the wildcard not-found route as documentation', () => {

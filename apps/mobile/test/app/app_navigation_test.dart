@@ -10,13 +10,14 @@ import 'package:trilha_mobile/core/networking/api_client.dart';
 import 'package:trilha_mobile/features/auth/application/auth_providers.dart';
 import 'package:trilha_mobile/features/auth/application/auth_state.dart';
 import 'package:trilha_mobile/features/auth/presentation/auth_routes.dart';
-import 'package:trilha_mobile/features/auth/presentation/home_screen.dart';
+import 'package:trilha_mobile/features/map/presentation/map_screen.dart';
 import 'package:trilha_mobile/features/auth/presentation/sign_in_screen.dart';
 import 'package:trilha_mobile/features/auth/presentation/sign_up_screen.dart';
 import 'package:trilha_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:trilha_mobile/features/root/presentation/root_screen.dart';
 
 import '../support/auth_fakes.dart';
+import '../support/places_fakes.dart';
 
 /// Composition root and auth-derived navigation (§36, §51).
 void main() {
@@ -25,7 +26,7 @@ void main() {
 
   group('Composition root', () {
     test('config, logger and reporter resolve from overrides', () {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       expect(
@@ -37,7 +38,7 @@ void main() {
     });
 
     test('the API client is built from the injected configuration', () {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       final ApiClient client = container.read(apiClientProvider);
@@ -48,7 +49,7 @@ void main() {
     });
 
     test('the API client carries the auth interceptor', () {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       // Request id, logging and auth — auth must be present or protected calls
@@ -75,7 +76,7 @@ void main() {
     });
 
     test('the API client is a singleton within a scope', () {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       expect(
@@ -117,7 +118,7 @@ void main() {
     testWidgets('lands on sign-in when no session is stored', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -138,7 +139,7 @@ void main() {
         await tester.pumpWidget(app(container));
         await tester.pumpAndSettle();
 
-        expect(find.byType(HomeScreen), findsOneWidget);
+        expect(find.byType(MapScreen), findsOneWidget);
         expect(find.byType(SignInScreen), findsNothing);
       },
     );
@@ -146,7 +147,7 @@ void main() {
     testWidgets(
       'signing in moves to the authenticated root with no manual navigation',
       (WidgetTester tester) async {
-        final ProviderContainer container = authTestContainer();
+        final ProviderContainer container = placesTestContainer();
         addTearDown(container.dispose);
 
         await tester.pumpWidget(app(container));
@@ -158,19 +159,19 @@ void main() {
             .login(email: 'ana@trilha.test', password: 'a quiet trail');
         await tester.pumpAndSettle();
 
-        expect(find.byType(HomeScreen), findsOneWidget);
+        expect(find.byType(MapScreen), findsOneWidget);
       },
     );
 
     testWidgets('signing out returns to sign-in', (WidgetTester tester) async {
-      final ProviderContainer container = authTestContainer(
+      final ProviderContainer container = placesTestContainer(
         tokenStore: FakeTokenStore('stored-refresh-token'),
       );
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
       await tester.pumpAndSettle();
-      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(MapScreen), findsOneWidget);
 
       await container.read(authControllerProvider.notifier).logout();
       await tester.pumpAndSettle();
@@ -181,7 +182,7 @@ void main() {
     testWidgets('an unauthenticated user cannot reach a protected route', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -197,7 +198,7 @@ void main() {
     testWidgets('an authenticated user cannot go back to sign-in', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer(
+      final ProviderContainer container = placesTestContainer(
         tokenStore: FakeTokenStore('stored-refresh-token'),
       );
       addTearDown(container.dispose);
@@ -209,13 +210,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(SignInScreen), findsNothing);
-      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(MapScreen), findsOneWidget);
     });
 
     testWidgets('an authenticated user can reach the profile', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer(
+      final ProviderContainer container = placesTestContainer(
         tokenStore: FakeTokenStore('stored-refresh-token'),
       );
       addTearDown(container.dispose);
@@ -232,7 +233,7 @@ void main() {
     testWidgets('registration is reachable from sign-in', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -249,7 +250,7 @@ void main() {
     testWidgets('applies the brand theme to the running app', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -269,14 +270,16 @@ void main() {
 
     test('route names are stable', () {
       expect(AuthRoutes.loginName, 'sign-in');
-      expect(AuthRoutes.homeName, 'home');
+      /* The authenticated root became the map in PR-02: Trilha is map-first. */
+      expect(AuthRoutes.homeName, 'map');
+      expect(AuthRoutes.homePath, '/map');
       expect(AuthRoutes.profileName, 'profile');
     });
 
     testWidgets('the router is disposed with its scope', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       final GoRouter router = container.read(appRouterProvider);
 
       container.dispose();

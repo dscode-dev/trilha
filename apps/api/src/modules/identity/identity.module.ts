@@ -12,6 +12,7 @@ import {
 } from './infrastructure/user.repository.js';
 
 import { SessionIssuer } from './application/session-issuer.js';
+import { SessionAuthenticator } from './application/session-authenticator.js';
 import { RegisterUseCase } from './application/register.use-case.js';
 import { LoginUseCase } from './application/login.use-case.js';
 import { RefreshUseCase } from './application/refresh.use-case.js';
@@ -47,6 +48,7 @@ import { AuthRateLimitGuard } from './presentation/guards/auth-rate-limit.guard.
 
     /* application */
     SessionIssuer,
+    SessionAuthenticator,
     RegisterUseCase,
     LoginUseCase,
     RefreshUseCase,
@@ -58,6 +60,9 @@ import { AuthRateLimitGuard } from './presentation/guards/auth-rate-limit.guard.
     AuthGuard,
     AuthRateLimitGuard,
   ],
-  exports: [AuthGuard],
+  /* `SessionAuthenticator` is the whole public surface: it is what `AuthGuard` needs
+     in order to be constructed inside a consuming module, and it grants nothing
+     beyond "who is this request". Tokens and sessions stay internal. */
+  exports: [AuthGuard, SessionAuthenticator],
 })
 export class IdentityModule {}

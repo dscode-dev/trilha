@@ -10,7 +10,7 @@ import 'package:trilha_mobile/features/auth/application/auth_providers.dart';
 import 'package:trilha_mobile/features/auth/data/auth_api.dart';
 import 'package:trilha_mobile/features/auth/data/secure_token_store.dart';
 import 'package:trilha_mobile/features/auth/domain/account.dart';
-import 'package:trilha_mobile/features/auth/domain/auth_failure.dart';
+import 'package:trilha_mobile/core/errors/app_failure.dart';
 import 'package:trilha_mobile/features/auth/domain/auth_session.dart';
 
 /// In-memory stand-in for platform secure storage.
@@ -70,12 +70,12 @@ class FakeAuthApi implements AuthEndpoints {
   Account account;
 
   /// Set to make the next matching call fail.
-  AuthFailure? registerFailure;
-  AuthFailure? loginFailure;
-  AuthFailure? refreshFailure;
-  AuthFailure? meFailure;
-  AuthFailure? updateProfileFailure;
-  AuthFailure? changePasswordFailure;
+  AppFailure? registerFailure;
+  AppFailure? loginFailure;
+  AppFailure? refreshFailure;
+  AppFailure? meFailure;
+  AppFailure? updateProfileFailure;
+  AppFailure? changePasswordFailure;
 
   /// Delay applied to `refresh`, so concurrent callers genuinely overlap.
   Duration refreshDelay = Duration.zero;
@@ -121,7 +121,7 @@ class FakeAuthApi implements AuthEndpoints {
   }) async {
     registerCalls += 1;
     await _pause();
-    final AuthFailure? failure = registerFailure;
+    final AppFailure? failure = registerFailure;
     if (failure != null) throw failure;
 
     account = Account(
@@ -140,7 +140,7 @@ class FakeAuthApi implements AuthEndpoints {
   }) async {
     loginCalls += 1;
     await _pause();
-    final AuthFailure? failure = loginFailure;
+    final AppFailure? failure = loginFailure;
     if (failure != null) throw failure;
     return _newSession();
   }
@@ -151,7 +151,7 @@ class FakeAuthApi implements AuthEndpoints {
     refreshTokensSeen.add(refreshToken);
     if (refreshDelay > Duration.zero) await Future<void>.delayed(refreshDelay);
 
-    final AuthFailure? failure = refreshFailure;
+    final AppFailure? failure = refreshFailure;
     if (failure != null) throw failure;
     return _newSession();
   }
@@ -169,7 +169,7 @@ class FakeAuthApi implements AuthEndpoints {
   @override
   Future<Account> me(String accessToken) async {
     meCalls += 1;
-    final AuthFailure? failure = meFailure;
+    final AppFailure? failure = meFailure;
     if (failure != null) throw failure;
     return account;
   }
@@ -183,7 +183,7 @@ class FakeAuthApi implements AuthEndpoints {
   }) async {
     updateProfileCalls += 1;
     await _pause();
-    final AuthFailure? failure = updateProfileFailure;
+    final AppFailure? failure = updateProfileFailure;
     if (failure != null) throw failure;
 
     account = Account(
@@ -203,7 +203,7 @@ class FakeAuthApi implements AuthEndpoints {
     required String newPassword,
   }) async {
     changePasswordCalls += 1;
-    final AuthFailure? failure = changePasswordFailure;
+    final AppFailure? failure = changePasswordFailure;
     if (failure != null) throw failure;
   }
 }

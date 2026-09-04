@@ -418,6 +418,264 @@
           "me"
         ]
       }
+    },
+    "/api/v1/places/categories": {
+      "get": {
+        "description": "The fixed vocabulary a place can be filed under. Public.",
+        "operationId": "PlacesController_categories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlaceCategoryDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "List place categories",
+        "tags": [
+          "places"
+        ]
+      }
+    },
+    "/api/v1/places/map": {
+      "get": {
+        "description": "The map query. Returns only what a marker needs — id, name, category and position — so a pan does not transfer descriptions nobody is reading. Viewports crossing the antimeridian are rejected; see the error message.",
+        "operationId": "PlacesController_map",
+        "parameters": [
+          {
+            "name": "west",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": -34.9
+            }
+          },
+          {
+            "name": "east",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": -34.8
+            }
+          },
+          {
+            "name": "south",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": -8.1
+            }
+          },
+          {
+            "name": "north",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "example": -8
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceMapResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Places inside a viewport",
+        "tags": [
+          "places"
+        ]
+      }
+    },
+    "/api/v1/places/nearby": {
+      "get": {
+        "description": "Nearest first. Distances are metres on the spheroid, not degrees.",
+        "operationId": "PlacesController_nearby",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Places within a radius",
+        "tags": [
+          "places"
+        ]
+      }
+    },
+    "/api/v1/places/search": {
+      "get": {
+        "description": "Accent- and case-insensitive: \"sao paulo\" matches \"São Paulo\". Supply lat/lng to order results by proximity and receive distances.",
+        "operationId": "PlacesController_search",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search places by name",
+        "tags": [
+          "places"
+        ]
+      }
+    },
+    "/api/v1/places/{id}": {
+      "get": {
+        "description": "Public. Archived places are hidden.",
+        "operationId": "PlacesController_byId",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceDetailDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Read one place",
+        "tags": [
+          "places"
+        ]
+      }
+    },
+    "/api/v1/places": {
+      "post": {
+        "description": "Requires a session. Provenance, status and authorship are decided by the server and ignored if sent. The response may carry advisory near-duplicates.",
+        "operationId": "PlacesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlaceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePlaceResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Contribute a place",
+        "tags": [
+          "places"
+        ]
+      }
     }
   },
   "info": {
@@ -818,6 +1076,300 @@
         },
         "required": [
           "revokedSessions"
+        ]
+      },
+      "PlaceCategoryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "FOOD"
+          },
+          "label": {
+            "type": "string",
+            "example": "Food & drink"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "PlaceMapItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Marco Zero"
+          },
+          "categoryId": {
+            "type": "string",
+            "example": "LANDMARK"
+          },
+          "latitude": {
+            "type": "number",
+            "example": -8.0631
+          },
+          "longitude": {
+            "type": "number",
+            "example": -34.8711
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "categoryId",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "PlaceMapResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaceMapItemDto"
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when the viewport held more places than the response cap. Zoom in."
+          }
+        },
+        "required": [
+          "items",
+          "truncated"
+        ]
+      },
+      "PlaceListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Marco Zero"
+          },
+          "categoryId": {
+            "type": "string",
+            "example": "LANDMARK"
+          },
+          "latitude": {
+            "type": "number",
+            "example": -8.0631
+          },
+          "longitude": {
+            "type": "number",
+            "example": -34.8711
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "distanceMetres": {
+            "type": "number",
+            "nullable": true,
+            "description": "Metres from the query point. Null when the query had no reference point.",
+            "example": 850
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "categoryId",
+          "latitude",
+          "longitude",
+          "description",
+          "distanceMetres"
+        ]
+      },
+      "PlacePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaceListItemDto"
+            }
+          },
+          "limit": {
+            "type": "number",
+            "example": 20
+          },
+          "offset": {
+            "type": "number",
+            "example": 0
+          },
+          "hasMore": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "hasMore"
+        ]
+      },
+      "PlaceContributorDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "ana-souza"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Ana Souza"
+          }
+        },
+        "required": [
+          "username",
+          "displayName"
+        ]
+      },
+      "PlaceDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Marco Zero"
+          },
+          "categoryId": {
+            "type": "string",
+            "example": "LANDMARK"
+          },
+          "latitude": {
+            "type": "number",
+            "example": -8.0631
+          },
+          "longitude": {
+            "type": "number",
+            "example": -34.8711
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "provenance": {
+            "type": "string",
+            "enum": [
+              "COMMUNITY",
+              "SYSTEM"
+            ],
+            "description": "Where this record came from.",
+            "example": "COMMUNITY"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "PENDING_REVIEW",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-09-04T12:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "example": "2026-09-04T12:00:00.000Z"
+          },
+          "contributor": {
+            "nullable": true,
+            "description": "Public attribution for a community submission. Never an email or account id.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlaceContributorDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "categoryId",
+          "latitude",
+          "longitude",
+          "description",
+          "provenance",
+          "status",
+          "createdAt",
+          "updatedAt",
+          "contributor"
+        ]
+      },
+      "CreatePlaceRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Marco Zero"
+          },
+          "categoryId": {
+            "type": "string",
+            "example": "LANDMARK",
+            "description": "An id from GET /places/categories."
+          },
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "example": -8.0631
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "example": -34.8711
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "name",
+          "categoryId",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "CreatePlaceResponseDto": {
+        "type": "object",
+        "properties": {
+          "place": {
+            "$ref": "#/components/schemas/PlaceDetailDto"
+          },
+          "possibleDuplicates": {
+            "description": "Nearby places with a similar name and the same category. Advisory only — the submission was accepted. Two restaurants sharing a name in different places are not duplicates.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaceListItemDto"
+            }
+          }
+        },
+        "required": [
+          "place",
+          "possibleDuplicates"
         ]
       }
     }

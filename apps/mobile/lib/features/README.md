@@ -29,8 +29,23 @@ features/<feature>/
 
 ## Present today
 
-- `root/` — the institutional root surface. It exists to prove the foundation renders;
-  it is not a product feature and will be replaced once real destinations land.
+- `root/` — the launch surface, shown only while a stored session is being restored.
+- `auth/` — accounts, sessions and credentials.
+- `profile/` — the signed-in user's own profile.
+- `places/` — the Place domain: fetching, searching, contributing.
+- `map/` — visual geographic orchestration: viewport, camera, selection, device
+  location.
+
+### Why `map` and `places` are separate
+
+`places` owns the domain — what a Place *is*, how it is fetched and created. `map`
+owns the orchestration — which viewport is showing, where the camera points, what is
+selected, whether location was granted.
+
+The dependency runs one way: **`map` uses `places`; `places` knows nothing about a
+map.** That is what lets a Place be listed, searched or linked to without a map on
+screen, and it is why a future trail-builder can reuse `places` untouched. Merging
+them would make every Place read carry map state it does not need.
 
 Everything else arrives with the PR that owns it (PR-01 onward). This directory is
 deliberately not pre-populated with empty folders for features that do not exist.

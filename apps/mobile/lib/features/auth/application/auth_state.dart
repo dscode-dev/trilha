@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../domain/account.dart';
-import '../domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 
 /// Where the app is in the authentication lifecycle (§36).
 ///
@@ -25,7 +25,7 @@ final class AuthBootstrapping extends AuthState {
 final class AuthUnauthenticated extends AuthState {
   const AuthUnauthenticated({this.reason});
 
-  final AuthFailure? reason;
+  final AppFailure? reason;
 
   @override
   List<Object?> get props => <Object?>[reason];

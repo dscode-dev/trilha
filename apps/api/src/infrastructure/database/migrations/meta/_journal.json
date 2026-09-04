@@ -15,6 +15,13 @@
       "when": 1788531452023,
       "tag": "0001_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788549538701,
+      "tag": "0002_places",
+      "breakpoints": true
     }
   ]
 }

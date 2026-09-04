@@ -9,7 +9,7 @@ import '../../../shared/widgets/async_action_button.dart';
 import '../../../shared/widgets/form_error_banner.dart';
 import '../../../shared/widgets/trilha_logo.dart';
 import '../application/auth_providers.dart';
-import '../domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 import 'auth_form_messages.dart';
 import 'auth_routes.dart';
 import 'auth_validators.dart';
@@ -59,7 +59,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     } on Object catch (error) {
       if (!mounted) return;
       setState(
-        () => _error = AuthFormMessages.forFailure(AuthFailure.from(error)),
+        () => _error = AuthFormMessages.forFailure(AppFailure.from(error)),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

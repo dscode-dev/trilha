@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Foreground only: NSLocationAlwaysAndWhenInUseUsageDescription is deliberately
+	     absent, because Trilha never asks for background location (§42). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Trilha uses your location to centre the map on where you are. Your location stays on this device and is never uploaded.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

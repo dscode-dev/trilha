@@ -1,4 +1,4 @@
-import '../domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 
 /// Turns a failure into words for a person (§41, §45).
 ///
@@ -7,23 +7,24 @@ import '../domain/auth_failure.dart';
 abstract final class AuthFormMessages {
   const AuthFormMessages._();
 
-  static String forFailure(AuthFailure failure) => switch (failure.kind) {
-    AuthFailureKind.invalidCredentials => 'Email or password is incorrect.',
-    AuthFailureKind.emailAlreadyInUse =>
+  static String forFailure(AppFailure failure) => switch (failure.kind) {
+    FailureKind.invalidCredentials => 'Email or password is incorrect.',
+    FailureKind.emailAlreadyInUse =>
       'That email is already registered. Try signing in.',
-    AuthFailureKind.usernameAlreadyInUse =>
-      'That username is taken. Try another.',
-    AuthFailureKind.weakPassword =>
+    FailureKind.usernameAlreadyInUse => 'That username is taken. Try another.',
+    FailureKind.weakPassword =>
       'Choose a longer password — at least 12 characters.',
-    AuthFailureKind.validation => 'Please check the highlighted fields.',
-    AuthFailureKind.rateLimited => _throttled(failure.retryAfterSeconds),
-    AuthFailureKind.sessionExpired =>
-      'Your session ended. Please sign in again.',
-    AuthFailureKind.accountDisabled =>
+    FailureKind.validation => 'Please check the highlighted fields.',
+    FailureKind.rateLimited => _throttled(failure.retryAfterSeconds),
+    FailureKind.sessionExpired => 'Your session ended. Please sign in again.',
+    FailureKind.accountDisabled =>
       'This account is unavailable. Contact support.',
-    AuthFailureKind.networkUnavailable =>
+    FailureKind.networkUnavailable =>
       'No connection. Check your network and try again.',
-    AuthFailureKind.unknown => 'Something went wrong. Please try again.',
+    FailureKind.unknown => 'Something went wrong. Please try again.',
+    /* A cancelled request is the app superseding its own work; there is nothing to
+       tell the user, but the switch must stay exhaustive. */
+    FailureKind.cancelled => '',
   };
 
   static String _throttled(int? retryAfterSeconds) {

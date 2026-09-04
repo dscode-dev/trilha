@@ -8,7 +8,7 @@ import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/async_action_button.dart';
 import '../../../shared/widgets/form_error_banner.dart';
 import '../../auth/application/auth_providers.dart';
-import '../../auth/domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../auth/presentation/auth_form_messages.dart';
 import '../../auth/presentation/auth_routes.dart';
 import '../../auth/presentation/auth_validators.dart';
@@ -64,7 +64,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     } on Object catch (error) {
       if (!mounted) return;
       setState(
-        () => _error = AuthFormMessages.forFailure(AuthFailure.from(error)),
+        () => _error = AuthFormMessages.forFailure(AppFailure.from(error)),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

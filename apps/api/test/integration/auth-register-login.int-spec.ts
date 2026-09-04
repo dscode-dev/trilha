@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 import { createApp } from '../../src/bootstrap.js';
@@ -192,6 +192,13 @@ describe('Registration and login', () => {
     });
 
     describe('anti-enumeration (§27)', () => {
+      /* These tests deliberately fail logins. Sibling suites now create accounts from
+         the same loopback address, so the shared counters are cleared first — a 429
+         would make the two responses differ for a reason unrelated to enumeration. */
+      beforeEach(async () => {
+        await clearRateLimits(app);
+      });
+
       it('returns the same code for a wrong password and an unknown account', async () => {
         const account = await registerAccount(app);
 

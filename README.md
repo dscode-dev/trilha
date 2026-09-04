@@ -3,10 +3,10 @@
 Geospatial trail platform. Flutter client, NestJS modular-monolith API, PostgreSQL +
 PostGIS, Redis.
 
-**Current state: PR-01 — identity, session and profile.** A person can create an
-account, stay signed in across restarts, edit their profile, change their password and
-sign out. No other product domain exists yet — that is deliberate, see
-`docs/constitution.md`.
+**Current state: PR-02 — geographic foundation and Places.** A person can open a real
+map, explore it with or without granting location, see Places served from PostGIS,
+search them, open their details, and contribute new ones. Routing, trails, reviews and
+safety do not exist yet — that is deliberate, see `docs/constitution.md`.
 
 ## Requirements
 
@@ -19,7 +19,9 @@ sign out. No other product domain exists yet — that is deliberate, see
 
 Exact versions and why each was chosen: `docs/technology-baseline.md`.
 
-For iOS builds: Xcode. For Android builds: the Android SDK **including cmdline-tools**
+For iOS builds: **Xcode 17 or newer** — MapboxMaps 11.30 ships Swift 6.2 binary
+frameworks, which Xcode 16 cannot consume (see `docs/technology-baseline.md`).
+For Android builds: the Android SDK **including cmdline-tools**
 (Android Studio → SDK Manager → SDK Tools → *Android SDK Command-line Tools*), then
 `flutter doctor --android-licenses`.
 
@@ -124,7 +126,59 @@ make logs
 | GET | `/api/v1/me` | The authenticated account and profile. |
 | PATCH | `/api/v1/me/profile` | Update displayName, username or bio. |
 | POST | `/api/v1/me/change-password` | Change the password; revokes every session. |
+| GET | `/api/v1/places/categories` | The category vocabulary. Public. |
+| GET | `/api/v1/places/map` | Places inside a viewport — the map query. Public. |
+| GET | `/api/v1/places/nearby` | Places within a radius, nearest first. Public. |
+| GET | `/api/v1/places/search` | Name search, accent- and case-insensitive. Public. |
+| GET | `/api/v1/places/:id` | One place with its provenance. Public. |
+| POST | `/api/v1/places` | Contribute a place. **Requires a session.** |
 | GET | `/docs` | OpenAPI UI, when `SWAGGER_ENABLED=true`. |
+
+## Places and geography
+
+```
+Flutter (Mapbox renders)  ──▶  GET /places/map?north=…&south=…&east=…&west=…
+                                     │
+                          PostGIS: location && envelope::geography  → GIST index
+```
+
+- **PostGIS is the spatial source of truth.** `geography(Point, 4326)`, so distances
+  are real metres on the spheroid rather than degrees. Marco Zero → Igreja da Sé
+  measures 6,242 m, which is the ground truth.
+- **The API speaks degrees**; Web Mercator never leaves the map renderer.
+- **Reads are public, contributing needs a session.** A first-time visitor can explore
+  the map without an account.
+- **Provenance is recorded on every Place** and set by the server — a client claiming
+  `SYSTEM` is ignored.
+- **Search is accent-insensitive**: "sao paulo" finds "São Paulo", via a generated
+  column and a trigram index.
+- **Near-duplicates are advisory.** Submitting a similar name nearby returns what
+  looks alike; it never blocks, because two restaurants sharing a name in different
+  cities are two places.
+- **Mapbox renders; it is not a source of Places** (ADR-0011).
+
+Baseline at 40,007 places: viewport 3.7–4.2 ms, radius 45–69 ms, search 12–17 ms.
+
+### Running the map
+
+The map needs a **public** Mapbox token (`pk.`), supplied at build time and never
+committed:
+
+```bash
+cd apps/mobile
+flutter run --dart-define=MAPBOX_ACCESS_TOKEN=pk.your_public_token
+```
+
+Without one the app explains what is missing rather than showing a blank rectangle.
+Restrict the token by URL in the Mapbox dashboard. A **secret** token (`sk.`) grants
+account access and must never be built into a client.
+
+### Location
+
+Foreground only. Trilha asks for permission when the user taps "show my location",
+centres the map, and discards the position — it is never persisted and never sent to
+the server. `ACCESS_BACKGROUND_LOCATION` is deliberately absent from the manifest.
+Denying permission leaves the map fully usable.
 
 ## Authentication
 
@@ -277,6 +331,22 @@ Studio's SDK Manager. The pin lives in `apps/mobile/android/app/build.gradle.kts
 
 **Signed in, then everything returns 401.** Expected after a password change or
 `logout-all`: every session is revoked by design. Sign in again.
+
+**The app shows "The map needs a Mapbox token".** Working as intended — pass
+`--dart-define=MAPBOX_ACCESS_TOKEN=pk.…`.
+
+**Android build fails with `Could not find method kotlin()`.** `mapbox_maps_flutter`
+2.30.0 has an AGP 9 incompatibility; the workaround lives in
+`apps/mobile/android/build.gradle.kts` and is documented in
+`docs/technology-baseline.md`. Do not delete it until the plugin is fixed upstream.
+
+**iOS build fails with `Failed to build module 'MapboxCommon' … not supported by the
+compiler`.** Xcode is older than 17. Mapbox's binary frameworks are built with Swift
+6.2 and require a matching or newer toolchain. Android is unaffected.
+
+**A viewport query returns 400.** The viewport is larger than 5° or crosses the
+antimeridian. Both are rejected explicitly rather than returning a silently empty or
+very slow result.
 
 ## Documentation
 

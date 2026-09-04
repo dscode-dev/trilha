@@ -8,8 +8,9 @@ abstract final class AuthRoutes {
   static const String registerPath = '/sign-up';
   static const String registerName = 'sign-up';
 
-  static const String homePath = '/home';
-  static const String homeName = 'home';
+  /// The map is the product's root surface (§38), not a dashboard.
+  static const String homePath = '/map';
+  static const String homeName = 'map';
 
   static const String profilePath = '/profile';
   static const String profileName = 'profile';

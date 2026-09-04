@@ -10,7 +10,7 @@ import '../../../shared/widgets/form_error_banner.dart';
 import '../../../shared/widgets/initials_avatar.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/domain/account.dart';
-import '../../auth/domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../auth/presentation/auth_form_messages.dart';
 import '../../auth/presentation/auth_routes.dart';
 import '../../auth/presentation/auth_validators.dart';
@@ -81,10 +81,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           .showSnackBar(const SnackBar(content: Text('Profile updated')));
     } on Object catch (error) {
       if (!mounted) return;
-      final AuthFailure failure = AuthFailure.from(error);
+      final AppFailure failure = AppFailure.from(error);
       setState(() {
         _error = AuthFormMessages.forFailure(failure);
-        if (failure.kind == AuthFailureKind.usernameAlreadyInUse) {
+        if (failure.kind == FailureKind.usernameAlreadyInUse) {
           _usernameConflict = 'That username is taken';
         }
       });

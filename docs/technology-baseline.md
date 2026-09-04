@@ -1,6 +1,6 @@
 # Technology baseline
 
-**Verified at: 2026-09-04** (PR-00 foundation, PR-01 identity)
+**Verified at: 2026-09-04** (PR-00 foundation, PR-01 identity, PR-02 geography)
 
 Every version below was checked against its upstream registry at implementation time
 (npm registry, pub.dev, nodejs.org, Docker Hub, the Flutter release channel) — not
@@ -66,7 +66,14 @@ Re-verify this table at the start of each dependency review and update
 | Technology | Latest stable | Selected | Source | Reason |
 | --- | --- | --- | --- | --- |
 | PostgreSQL | 18.6 (19 is beta) | **18.6** | Docker Hub `postgis/postgis` | Latest stable major. PostgreSQL 19 is beta — excluded by constitution §26. |
-| PostGIS | 3.6.4 | **3.6.4** | Docker Hub | Ships with the `18-3.6-alpine` image. |
+| PostGIS | 3.6.4 | **3.6.4** | Docker Hub | Ships with the `18-3.6-alpine` image. Spatial source of truth (ADR-0010). |
+| `pg_trgm` | 1.6 | **1.6** | PostgreSQL contrib | Trigram index for the place-name search (§22). |
+| `unaccent` | 1.1 | **1.1** | PostgreSQL contrib | Accent folding, so "sao paulo" finds "São Paulo". |
+
+> **`unaccent()` is STABLE, not IMMUTABLE**, because it resolves a dictionary by name
+> at call time. Generated columns and expression indexes both require IMMUTABLE, so
+> migration `0002` defines `trilha_immutable_unaccent(text)` with the dictionary
+> pinned — which makes it genuinely immutable rather than merely labelled so.
 | Redis | 8.10.1 | **8.10-alpine** | Docker Hub | Latest stable. |
 | Docker image (API) | node:24.20.0-alpine3.24 | **same** | Docker Hub | Matches the Node LTS pin. |
 
@@ -85,6 +92,38 @@ Re-verify this table at the start of each dependency review and update
 | equatable | 2.1.0 | **2.1.0** | pub.dev | Value equality without hand-written `==`. |
 | flutter_lints | 6.0.0 | **6.0.0** | pub.dev | Lint baseline, extended in `analysis_options.yaml`. |
 | flutter_secure_storage | 11.0.0 | **11.0.0** | pub.dev | Keychain / Keystore-backed refresh-token storage (constitution §38). |
+| mapbox_maps_flutter | 2.30.0 | **2.30.0** | pub.dev | Official Mapbox Maps SDK; rendering only (ADR-0011). Wraps MapboxMaps 11.30.0. |
+| geolocator | 14.0.3 | **14.0.3** | pub.dev | Foreground location. |
+| permission_handler | 13.0.2 | **13.0.2** | pub.dev | Permission state, including "denied forever". |
+
+> **Mapbox needs `compileSdk 37`** — already pinned for `flutter_secure_storage`. Its
+> iOS deployment target is 14.0; the Runner project is at 15.0.
+>
+> **Mapbox v11 release artefacts need no download token.** Only the *snapshots* Maven
+> repository requires `SDK_REGISTRY_TOKEN`; releases resolve publicly. Verified by
+> building with no credentials configured.
+>
+> **iOS requires Xcode 17 or newer.** MapboxMaps 11.30.0 ships binary XCFrameworks
+> built with Swift 6.2.4, and a Swift binary framework can only be consumed by a
+> compiler at least as new as the one that produced it. On Xcode 16.2 (Swift 6.0.3)
+> the build fails with:
+>
+> ```
+> Failed to build module 'MapboxCommon'; this SDK is not supported by the compiler
+> (the SDK is built with 'Apple Swift version 6.2.4', while this compiler is
+> 'Apple Swift version 6.0.3').
+> ```
+>
+> This is an environment requirement, not a code defect — Android builds cleanly on
+> the same commit. **PR-02's iOS build was therefore not completed**: the reference
+> machine has Xcode 16.2. Verify on a machine with Xcode ≥ 17.
+>
+> **Gradle workaround, tracked as `TECHNICAL_DEBT`.** `mapbox_maps_flutter@2.30.0`
+> skips applying `kotlin-android` when AGP ≥ 9 but still uses the `kotlin { }`
+> extension that only KGP registers, so the build fails with
+> `Could not find method kotlin()` on Flutter 3.47 (AGP 9.1). The root
+> `android/build.gradle.kts` applies KGP to that one subproject. Remove once upstream
+> completes its built-in-Kotlin migration.
 
 > **`compileSdk` is pinned to 37** in `android/app/build.gradle.kts`.
 > `flutter_secure_storage@11`'s AAR declares a minimum compile SDK of 37 and the build

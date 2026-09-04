@@ -6,7 +6,7 @@ import '../../../core/logging/app_logger.dart';
 import '../data/auth_api.dart';
 import '../data/secure_token_store.dart';
 import '../domain/account.dart';
-import '../domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 import '../domain/auth_session.dart';
 import '../../../app/bootstrap/providers.dart';
 import 'auth_providers.dart';
@@ -52,7 +52,7 @@ class AuthController extends Notifier<AuthState> {
 
     try {
       return (await _refreshSession(session.refreshToken)).accessToken;
-    } on AuthFailure {
+    } on AppFailure {
       return null;
     }
   }
@@ -80,7 +80,7 @@ class AuthController extends Notifier<AuthState> {
 
     try {
       return (await _refreshSession(session.refreshToken)).accessToken;
-    } on AuthFailure {
+    } on AppFailure {
       return null;
     }
   }
@@ -101,11 +101,11 @@ class AuthController extends Notifier<AuthState> {
       final AuthSession session = await _refreshSession(refreshToken);
       if (!ref.mounted) return;
       await _loadAccount(session);
-    } on AuthFailure catch (failure) {
+    } on AppFailure catch (failure) {
       if (!ref.mounted) return;
       // A network problem is not a signed-out user: keeping the stored token lets
       // the next launch succeed once connectivity returns (§47).
-      if (failure.kind == AuthFailureKind.networkUnavailable) {
+      if (failure.kind == FailureKind.networkUnavailable) {
         state = AuthUnauthenticated(reason: failure);
         return;
       }
@@ -143,7 +143,7 @@ class AuthController extends Notifier<AuthState> {
     if (session != null) {
       try {
         await api.logout(session.accessToken);
-      } on AuthFailure catch (failure) {
+      } on AppFailure catch (failure) {
         // The local session is cleared regardless: a user who taps sign-out must end
         // up signed out even if the network call fails.
         logger.warning(
@@ -160,7 +160,7 @@ class AuthController extends Notifier<AuthState> {
     if (session != null) {
       try {
         await api.logoutAll(session.accessToken);
-      } on AuthFailure catch (failure) {
+      } on AppFailure catch (failure) {
         logger.warning(
           'Server logout-all failed; clearing local session',
           context: {'kind': failure.kind.name},
@@ -231,9 +231,9 @@ class AuthController extends Notifier<AuthState> {
       final AuthSession session = await api.refresh(refreshToken);
       await _persist(session);
       return session;
-    } on AuthFailure catch (failure) {
+    } on AppFailure catch (failure) {
       // A revoked or replayed session is terminal — never retried (§40).
-      if (failure.kind != AuthFailureKind.networkUnavailable) {
+      if (failure.kind != FailureKind.networkUnavailable) {
         await _clearSession(reason: failure);
       }
       rethrow;
@@ -245,7 +245,7 @@ class AuthController extends Notifier<AuthState> {
       final Account account = await api.me(session.accessToken);
       if (!ref.mounted) return;
       state = AuthAuthenticated(account);
-    } on AuthFailure catch (failure) {
+    } on AppFailure catch (failure) {
       await _clearSession(reason: failure);
     }
   }
@@ -256,7 +256,7 @@ class AuthController extends Notifier<AuthState> {
     await tokenStore.writeRefreshToken(session.refreshToken);
   }
 
-  Future<void> _clearSession({AuthFailure? reason}) async {
+  Future<void> _clearSession({AppFailure? reason}) async {
     _session = null;
     _refreshInFlight = null;
     if (!ref.mounted) return;
@@ -265,8 +265,8 @@ class AuthController extends Notifier<AuthState> {
     state = AuthUnauthenticated(reason: reason);
   }
 
-  static const AuthFailure _expired = AuthFailure(
-    kind: AuthFailureKind.sessionExpired,
+  static const AppFailure _expired = AppFailure(
+    kind: FailureKind.sessionExpired,
     message: 'Your session has ended. Please sign in again.',
   );
 }

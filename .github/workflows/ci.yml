@@ -180,8 +180,14 @@ jobs:
 
       # Android is the build the Linux runner can actually produce; iOS requires macOS
       # and is verified locally (see README).
+      # A build-time define, not a deployment secret: the map needs a *public*
+      # Mapbox token, and CI only needs to prove the app compiles. The empty default
+      # keeps forks and PRs from external contributors building — the app renders an
+      # explanatory surface rather than a map when the token is absent.
       - name: Build Android APK (debug)
-        run: flutter build apk --debug
+        run: flutter build apk --debug --dart-define=MAPBOX_ACCESS_TOKEN="$MAPBOX_ACCESS_TOKEN"
+        env:
+          MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
 
       - uses: actions/upload-artifact@v5
         with:

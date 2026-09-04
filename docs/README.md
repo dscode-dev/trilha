@@ -20,6 +20,8 @@
 | [ADR-0007](adr/ADR-0007-typescript-esm-toolchain.md) | ESM, TypeScript 6 and Vitest for the API |
 | [ADR-0008](adr/ADR-0008-authentication-session-model.md) | Account, credential, profile and session as separate concerns |
 | [ADR-0009](adr/ADR-0009-refresh-token-rotation.md) | Single-use refresh rotation with database-enforced concurrency |
+| [ADR-0010](adr/ADR-0010-place-geospatial-model.md) | `geography(Point, 4326)` as the spatial source of truth |
+| [ADR-0011](adr/ADR-0011-mapbox-mobile-integration.md) | Mapbox for rendering, Trilha for Places |
 
 ## Writing an ADR
 

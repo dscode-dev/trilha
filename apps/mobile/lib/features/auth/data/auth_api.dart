@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/networking/api_client.dart';
 import '../domain/account.dart';
-import '../domain/auth_failure.dart';
+import '../../../core/errors/app_failure.dart';
 import '../domain/auth_session.dart';
 
 /// The authentication endpoints the app depends on.
@@ -44,7 +44,7 @@ abstract interface class AuthEndpoints {
 
 /// Talks to the real API.
 ///
-/// Every method translates transport failures into [AuthFailure], so nothing above
+/// Every method translates transport failures into [AppFailure], so nothing above
 /// this layer sees a `DioException` or an HTTP status.
 class AuthApi implements AuthEndpoints {
   const AuthApi(this._client);
@@ -174,8 +174,8 @@ class AuthApi implements AuthEndpoints {
     if (accessToken is! String ||
         refreshToken is! String ||
         expiresIn is! num) {
-      throw const AuthFailure(
-        kind: AuthFailureKind.unknown,
+      throw const AppFailure(
+        kind: FailureKind.unknown,
         message: 'Trilha returned an unexpected response. Please try again.',
       );
     }
@@ -193,7 +193,7 @@ class AuthApi implements AuthEndpoints {
     try {
       return await request();
     } on Object catch (error) {
-      throw AuthFailure.from(error);
+      throw AppFailure.from(error);
     }
   }
 

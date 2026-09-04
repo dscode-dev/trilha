@@ -3,14 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trilha_mobile/app/app.dart';
 import 'package:trilha_mobile/app/navigation/app_router.dart';
-import 'package:trilha_mobile/features/auth/domain/auth_failure.dart';
+import 'package:trilha_mobile/core/errors/app_failure.dart';
 import 'package:trilha_mobile/features/auth/presentation/auth_routes.dart';
-import 'package:trilha_mobile/features/auth/presentation/home_screen.dart';
+import 'package:trilha_mobile/features/map/presentation/map_screen.dart';
 import 'package:trilha_mobile/features/auth/presentation/sign_in_screen.dart';
 import 'package:trilha_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:trilha_mobile/shared/widgets/async_action_button.dart';
 
 import '../../support/auth_fakes.dart';
+import '../../support/places_fakes.dart';
 
 /// The auth and profile surfaces (§41, §42, §43, §46, §51).
 void main() {
@@ -21,8 +22,8 @@ void main() {
     WidgetTester tester, {
     FakeAuthApi? api,
   }) async {
-    final ProviderContainer container = authTestContainer(
-      api: api,
+    final ProviderContainer container = placesTestContainer(
+      auth: api,
       tokenStore: FakeTokenStore('stored-refresh-token'),
     );
     addTearDown(container.dispose);
@@ -37,7 +38,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi();
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -55,7 +56,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi();
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -80,11 +81,11 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi()
-        ..loginFailure = const AuthFailure(
-          kind: AuthFailureKind.invalidCredentials,
+        ..loginFailure = const AppFailure(
+          kind: FailureKind.invalidCredentials,
           message: 'Email or password is incorrect',
         );
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -111,11 +112,11 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi()
-        ..loginFailure = const AuthFailure(
-          kind: AuthFailureKind.networkUnavailable,
+        ..loginFailure = const AppFailure(
+          kind: FailureKind.networkUnavailable,
           message: 'Offline',
         );
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -139,12 +140,12 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi()
-        ..loginFailure = const AuthFailure(
-          kind: AuthFailureKind.rateLimited,
+        ..loginFailure = const AppFailure(
+          kind: FailureKind.rateLimited,
           message: 'Too many attempts',
           retryAfterSeconds: 120,
         );
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -172,7 +173,7 @@ void main() {
       // protects; an instant fake would make it zero frames wide.
       final FakeAuthApi api = FakeAuthApi()
         ..latency = const Duration(milliseconds: 120);
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -199,7 +200,7 @@ void main() {
     });
 
     testWidgets('never renders the password', (WidgetTester tester) async {
-      final ProviderContainer container = authTestContainer();
+      final ProviderContainer container = placesTestContainer();
       addTearDown(container.dispose);
 
       await tester.pumpWidget(app(container));
@@ -228,7 +229,7 @@ void main() {
 
     testWidgets('validates every field locally', (WidgetTester tester) async {
       final FakeAuthApi api = FakeAuthApi();
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await openSignUp(tester, container);
@@ -245,7 +246,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi();
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await openSignUp(tester, container);
@@ -277,11 +278,11 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi()
-        ..registerFailure = const AuthFailure(
-          kind: AuthFailureKind.emailAlreadyInUse,
+        ..registerFailure = const AppFailure(
+          kind: FailureKind.emailAlreadyInUse,
           message: 'That email address is already registered',
         );
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await openSignUp(tester, container);
@@ -314,7 +315,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final FakeAuthApi api = FakeAuthApi();
-      final ProviderContainer container = authTestContainer(api: api);
+      final ProviderContainer container = placesTestContainer(auth: api);
       addTearDown(container.dispose);
 
       await openSignUp(tester, container);
@@ -338,28 +339,29 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(MapScreen), findsOneWidget);
     });
   });
 
-  group('Authenticated root (§44)', () {
-    testWidgets('greets the signed-in user and shows no fabricated content', (
+  group('Authenticated root', () {
+    testWidgets('lands on the map, which shows no fabricated product content', (
       WidgetTester tester,
     ) async {
       await signedIn(tester);
 
-      expect(find.textContaining('Hello, Ana Souza'), findsOneWidget);
+      /* PR-02's root is the map. A test binding has no Mapbox token, so the surface
+         explains itself rather than rendering an empty rectangle — either way it
+         must not invent product content that does not exist. */
+      expect(find.byType(MapScreen), findsOneWidget);
 
-      // PR-01 ships no product surface; anything resembling one would be a lie.
       for (final String forbidden in <String>[
         'Trails',
-        'Nearby',
-        'Explore',
+        'Nearby you',
         'Feed',
-        'km',
         'Followers',
         'Badges',
         'Reviews',
+        'Rating',
       ]) {
         expect(
           find.textContaining(forbidden),

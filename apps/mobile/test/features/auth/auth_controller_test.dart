@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trilha_mobile/features/auth/application/auth_controller.dart';
 import 'package:trilha_mobile/features/auth/application/auth_providers.dart';
 import 'package:trilha_mobile/features/auth/application/auth_state.dart';
-import 'package:trilha_mobile/features/auth/domain/auth_failure.dart';
+import 'package:trilha_mobile/core/errors/app_failure.dart';
 
 import '../../support/auth_fakes.dart';
 
@@ -82,8 +82,8 @@ void main() {
 
     test('clears a rejected session and signs the user out (§40)', () async {
       store = FakeTokenStore('revoked-token');
-      api.refreshFailure = const AuthFailure(
-        kind: AuthFailureKind.sessionExpired,
+      api.refreshFailure = const AppFailure(
+        kind: FailureKind.sessionExpired,
         message: 'Session ended',
       );
 
@@ -105,8 +105,8 @@ void main() {
 
     test('keeps the stored token when the network is down (§47)', () async {
       store = FakeTokenStore('good-token');
-      api.refreshFailure = const AuthFailure(
-        kind: AuthFailureKind.networkUnavailable,
+      api.refreshFailure = const AppFailure(
+        kind: FailureKind.networkUnavailable,
         message: 'Offline',
       );
 
@@ -154,8 +154,8 @@ void main() {
     test(
       'a failed login leaves the user unauthenticated with nothing stored',
       () async {
-        api.loginFailure = const AuthFailure(
-          kind: AuthFailureKind.invalidCredentials,
+        api.loginFailure = const AppFailure(
+          kind: FailureKind.invalidCredentials,
           message: 'Email or password is incorrect',
         );
         controller();
@@ -163,7 +163,7 @@ void main() {
 
         await expectLater(
           controller().login(email: 'ana@trilha.test', password: 'wrong'),
-          throwsA(isA<AuthFailure>()),
+          throwsA(isA<AppFailure>()),
         );
 
         expect(state(), isA<AuthUnauthenticated>());
@@ -195,8 +195,8 @@ void main() {
       );
 
       // A user who taps sign-out ends up signed out regardless of connectivity.
-      api.refreshFailure = const AuthFailure(
-        kind: AuthFailureKind.networkUnavailable,
+      api.refreshFailure = const AppFailure(
+        kind: FailureKind.networkUnavailable,
         message: 'Offline',
       );
 
@@ -306,8 +306,8 @@ void main() {
         // The session dies server-side; every waiting caller must learn that.
         api
           ..refreshDelay = const Duration(milliseconds: 20)
-          ..refreshFailure = const AuthFailure(
-            kind: AuthFailureKind.sessionExpired,
+          ..refreshFailure = const AppFailure(
+            kind: FailureKind.sessionExpired,
             message: 'Session ended',
           );
 
@@ -346,18 +346,18 @@ void main() {
       );
       final String before = state().accountOrNull!.username;
 
-      api.updateProfileFailure = const AuthFailure(
-        kind: AuthFailureKind.usernameAlreadyInUse,
+      api.updateProfileFailure = const AppFailure(
+        kind: FailureKind.usernameAlreadyInUse,
         message: 'That username is taken',
       );
 
       await expectLater(
         controller().updateProfile(username: 'taken'),
         throwsA(
-          isA<AuthFailure>().having(
-            (AuthFailure f) => f.kind,
+          isA<AppFailure>().having(
+            (AppFailure f) => f.kind,
             'kind',
-            AuthFailureKind.usernameAlreadyInUse,
+            FailureKind.usernameAlreadyInUse,
           ),
         ),
       );
@@ -392,8 +392,8 @@ void main() {
         password: 'a quiet trail',
       );
 
-      api.changePasswordFailure = const AuthFailure(
-        kind: AuthFailureKind.invalidCredentials,
+      api.changePasswordFailure = const AppFailure(
+        kind: FailureKind.invalidCredentials,
         message: 'Email or password is incorrect',
       );
 
@@ -402,7 +402,7 @@ void main() {
           currentPassword: 'wrong',
           newPassword: 'a new phrase here',
         ),
-        throwsA(isA<AuthFailure>()),
+        throwsA(isA<AppFailure>()),
       );
 
       expect(state(), isA<AuthAuthenticated>());
