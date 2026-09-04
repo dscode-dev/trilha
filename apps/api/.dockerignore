@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+.git
+.eslintcache
+test
+**/*.spec.ts
+**/*.int-spec.ts
+Dockerfile
+.dockerignore

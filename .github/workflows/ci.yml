@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24.20.0'
+  FLUTTER_VERSION: '3.47.2'
+
+jobs:
+  api:
+    name: API — lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    services:
+      postgres:
+        # Must match infra/local/docker-compose.yml (docs/technology-baseline.md).
+        image: postgis/postgis:18-3.6-alpine
+        env:
+          POSTGRES_USER: trilha
+          POSTGRES_PASSWORD: trilha
+          POSTGRES_DB: trilha
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trilha -d trilha -q"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      redis:
+        image: redis:8.10-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/api/package-lock.json
+
+      # `npm ci` fails on a lockfile that disagrees with package.json.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # Proves migrations converge from a genuinely empty database (§37, §42).
+      - name: Migrate from empty database
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://trilha:trilha@localhost:5432/trilha
+          REDIS_URL: redis://localhost:6379
+
+      # Exercises real PostgreSQL/PostGIS and Redis — no mocks (§24, §43).
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: postgresql://trilha:trilha@localhost:5432/trilha
+          REDIS_URL: redis://localhost:6379
+
+      # The committed contract must match what the code actually serves (ADR-0006).
+      - name: OpenAPI contract is up to date
+        run: |
+          npm run openapi:generate
+          if ! git diff --exit-code -- ../../packages/contracts/openapi/openapi.json; then
+            echo "::error::openapi.json is stale. Run 'npm run build && npm run openapi:generate' and commit the result."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: postgresql://trilha:trilha@localhost:5432/trilha
+          REDIS_URL: redis://localhost:6379
+
+      # Dev-only advisories are reported but do not gate; the shipped surface must be clean.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit all dependencies (report only)
+        run: npm audit || true
+        continue-on-error: true
+
+  docker:
+    name: API — Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build production image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          target: runtime
+          push: false
+          load: true
+          tags: trilha-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A root container is a finding, not a preference (§30).
+      - name: Verify the image does not run as root
+        run: |
+          user="$(docker run --rm --entrypoint sh trilha-api:ci -c 'id -un')"
+          echo "container user: $user"
+          [ "$user" = "node" ] || { echo "::error::image runs as $user, expected node"; exit 1; }
+
+  mobile:
+    name: Mobile — analyze, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      - name: Test
+        run: flutter test
+
+      # Android is the build the Linux runner can actually produce; iOS requires macOS
+      # and is verified locally (see README).
+      - name: Build Android APK (debug)
+        run: flutter build apk --debug
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: trilha-android-debug
+          path: apps/mobile/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error

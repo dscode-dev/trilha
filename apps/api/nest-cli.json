@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "entryFile": "main",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "tsConfigPath": "tsconfig.build.json",
+    "assets": [{ "include": "infrastructure/database/migrations/**/*", "outDir": "dist" }],
+    "watchAssets": true,
+    "plugins": ["@nestjs/swagger/plugin"]
+  }
+}

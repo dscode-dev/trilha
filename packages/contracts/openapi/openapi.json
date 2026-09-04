@@ -1,0 +1,204 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "description": "Reports that the process is running. Does not check dependencies.",
+        "operationId": "HealthController_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
+    "/api/v1/ready": {
+      "get": {
+        "description": "Verifies PostgreSQL and Redis. Returns 503 when any dependency is unavailable.",
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "platform"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Trilha API",
+    "description": "Trilha platform API. PR-00 exposes platform endpoints only; product domains are introduced by their own pull requests.",
+    "version": "0.0.0",
+    "contact": {}
+  },
+  "tags": [
+    {
+      "name": "platform",
+      "description": "Liveness, readiness and other operational endpoints"
+    }
+  ],
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "service": {
+            "type": "string",
+            "example": "trilha-api"
+          },
+          "environment": {
+            "type": "string",
+            "example": "development"
+          },
+          "uptimeSeconds": {
+            "type": "number",
+            "description": "Process uptime in seconds.",
+            "example": 12.34
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-09-04T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "environment",
+          "uptimeSeconds",
+          "timestamp"
+        ]
+      },
+      "ReadinessResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "example": "ready"
+          },
+          "service": {
+            "type": "string",
+            "example": "trilha-api"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-09-04T12:00:00.000Z"
+          },
+          "dependencies": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object"
+            },
+            "description": "Per-dependency probe results."
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "timestamp",
+          "dependencies"
+        ]
+      },
+      "ErrorBody": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "VALIDATION_ERROR",
+              "BAD_REQUEST",
+              "UNAUTHORIZED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "CONFLICT",
+              "PAYLOAD_TOO_LARGE",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "TOO_MANY_REQUESTS",
+              "INTERNAL_ERROR",
+              "SERVICE_UNAVAILABLE",
+              "DEPENDENCY_UNAVAILABLE"
+            ],
+            "description": "Stable machine-readable code. Safe for clients to branch on.",
+            "example": "NOT_FOUND"
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable summary. Not intended for end-user display verbatim.",
+            "example": "Resource not found"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Correlation id for this request. Quote it when reporting problems.",
+            "example": "018f4c9e-2a1b-7c3d-9e4f-5a6b7c8d9e0f"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Optional structured context. Never contains internal details."
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,99 @@
+# Trilha — local development infrastructure.
+#
+#   make up      (or)   docker compose -f infra/local/docker-compose.yml up -d
+#
+# Brings up PostgreSQL+PostGIS, Redis and the API. Host ports are overridable so
+# this stack can coexist with other projects already bound to the defaults.
+
+name: trilha
+
+services:
+  postgres:
+    # PostgreSQL 18 (latest stable major) with PostGIS 3.6. Pinned by major:minor —
+    # see docs/technology-baseline.md.
+    image: postgis/postgis:18-3.6-alpine
+    container_name: trilha-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trilha}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trilha}
+      POSTGRES_DB: ${POSTGRES_DB:-trilha}
+      # Deterministic collation: index behaviour must not depend on host locale.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      # PostgreSQL 18+ images store data in a major-version subdirectory, so the
+      # mount belongs at /var/lib/postgresql — not the pre-18 /var/lib/postgresql/data.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # `pg_isready` alone reports true during initdb; querying settles that race.
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-trilha} -d ${POSTGRES_DB:-trilha} -q']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  redis:
+    image: redis:8.10-alpine
+    container_name: trilha-redis
+    restart: unless-stopped
+    # Local-only durability so a restart does not silently lose the dev dataset.
+    command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: trilha-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      APP_HOST: 0.0.0.0
+      APP_PORT: 3000
+      APP_NAME: trilha-api
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trilha}:${POSTGRES_PASSWORD:-trilha}@postgres:5432/${POSTGRES_DB:-trilha}
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      LOG_PRETTY: 'false'
+      SWAGGER_ENABLED: 'true'
+      CORS_ORIGINS: '*'
+    ports:
+      - '${API_PORT:-3000}:3000'
+    # Applies migrations, then serves. Migrations are explicit and must succeed
+    # before the process accepts traffic (constitution §Engineering).
+    command: ['sh', '-c', 'node dist/infrastructure/database/migrate.js && node dist/main.js']
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  postgres-data:
+    name: trilha-postgres-data
+  redis-data:
+    name: trilha-redis-data

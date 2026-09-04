@@ -1,0 +1,37 @@
+name: trilha_mobile
+description: Trilha — mobile client.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State, dependency composition and lifecycle (ADR-0005).
+  # Riverpod is composition and DI — it is not the architecture.
+  flutter_riverpod: ^3.4.3
+
+  # Declarative routing, prepared for deep links.
+  go_router: ^18.0.1
+
+  # HTTP client. Chosen for interceptors, typed errors and cancellation (§18).
+  dio: ^5.11.1
+
+  # Value equality for domain/state types without hand-written operator==.
+  equatable: ^2.0.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Source of truth is /logo.png at the repository root; this is a build-time copy
+    # so the Flutter toolchain can bundle it (see docs/design-foundation.md).
+    - assets/brand/logo.png
