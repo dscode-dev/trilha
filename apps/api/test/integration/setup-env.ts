@@ -28,3 +28,12 @@ process.env['RATE_LIMIT_LOGIN_PER_IP'] = '10000';
 process.env['RATE_LIMIT_LOGIN_PER_ACCOUNT'] = '10000';
 process.env['RATE_LIMIT_REGISTER_PER_IP'] = '10000';
 process.env['RATE_LIMIT_REFRESH_PER_IP'] = '10000';
+
+/* Routing: a placeholder token, because these tests never reach a real provider —
+   the provider port is substituted, and the corridor tests need only PostGIS. */
+process.env['MAPBOX_ROUTING_ACCESS_TOKEN'] = 'test-only-routing-token-not-a-real-credential';
+process.env['ROUTING_PROVIDER_TIMEOUT_MS'] = '5000';
+process.env['ROUTING_CORRIDOR_DEFAULT_METERS'] = '5000';
+process.env['ROUTING_CORRIDOR_MAX_METERS'] = '20000';
+process.env['RATE_LIMIT_ROUTING_PER_USER'] = '10000';
+process.env['RATE_LIMIT_ROUTING_PER_IP'] = '10000';

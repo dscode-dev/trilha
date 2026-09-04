@@ -27,6 +27,18 @@ export const ErrorCode = {
   /** Account exists but is not permitted to authenticate. */
   ACCOUNT_DISABLED: 'ACCOUNT_DISABLED',
 
+  /* --- Routing (PR-03) --- */
+  /** The request was well-formed but no route connects the two points. */
+  ROUTE_NOT_FOUND: 'ROUTE_NOT_FOUND',
+  /** Degenerate or implausible endpoints; rejected before any provider call. */
+  INVALID_ROUTE_REQUEST: 'INVALID_ROUTE_REQUEST',
+  /** An upstream routing provider exceeded its deadline. */
+  PROVIDER_TIMEOUT: 'PROVIDER_TIMEOUT',
+  /** An upstream provider is unreachable or returned something unusable. */
+  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
+  /** Trilha's own quota with an upstream provider is exhausted. */
+  PROVIDER_RATE_LIMITED: 'PROVIDER_RATE_LIMITED',
+
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',

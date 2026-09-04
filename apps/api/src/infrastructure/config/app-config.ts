@@ -57,6 +57,15 @@ export interface RateLimitConfig {
   readonly registerPerIp: number;
   readonly refreshPerIp: number;
   readonly passwordPerUser: number;
+  readonly routingPerUser: number;
+  readonly routingPerIp: number;
+}
+
+export interface RoutingConfig {
+  readonly accessToken: string;
+  readonly timeoutMs: number;
+  readonly corridorDefaultMeters: number;
+  readonly corridorMaxMeters: number;
 }
 
 export interface ObservabilityConfig {
@@ -77,6 +86,7 @@ export class AppConfig {
   readonly docs: DocsConfig;
   readonly auth: AuthConfig;
   readonly rateLimit: RateLimitConfig;
+  readonly routing: RoutingConfig;
   readonly observability: ObservabilityConfig;
 
   constructor(env: Env) {
@@ -117,6 +127,13 @@ export class AppConfig {
       ipHashKey: env.IP_HASH_KEY,
     };
 
+    this.routing = {
+      accessToken: env.MAPBOX_ROUTING_ACCESS_TOKEN,
+      timeoutMs: env.ROUTING_PROVIDER_TIMEOUT_MS,
+      corridorDefaultMeters: env.ROUTING_CORRIDOR_DEFAULT_METERS,
+      corridorMaxMeters: env.ROUTING_CORRIDOR_MAX_METERS,
+    };
+
     this.rateLimit = {
       windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS,
       loginPerIp: env.RATE_LIMIT_LOGIN_PER_IP,
@@ -124,6 +141,8 @@ export class AppConfig {
       registerPerIp: env.RATE_LIMIT_REGISTER_PER_IP,
       refreshPerIp: env.RATE_LIMIT_REFRESH_PER_IP,
       passwordPerUser: env.RATE_LIMIT_PASSWORD_PER_USER,
+      routingPerUser: env.RATE_LIMIT_ROUTING_PER_USER,
+      routingPerIp: env.RATE_LIMIT_ROUTING_PER_IP,
     };
 
     this.observability = {
@@ -194,6 +213,7 @@ export function loadAppConfig(source: Record<string, unknown>): AppConfig {
   }
 
   const config = new AppConfig(result.data);
+  assertStructuralInvariants(config);
   assertProductionInvariants(config);
   return config;
 }
@@ -209,6 +229,25 @@ function formatConfigError(error: z.ZodError): string {
     .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
     .join('\n');
   return `Invalid environment configuration:\n${issues}`;
+}
+
+/**
+ * Contradictions that are wrong in any environment.
+ *
+ * Distinct from the production guards below: those permit a relaxed local setup,
+ * whereas a default that exceeds its own maximum is incoherent everywhere and would
+ * silently clamp to a value nobody chose.
+ */
+function assertStructuralInvariants(config: AppConfig): void {
+  const violations: string[] = [];
+
+  if (config.routing.corridorDefaultMeters > config.routing.corridorMaxMeters) {
+    violations.push('ROUTING_CORRIDOR_DEFAULT_METERS must not exceed ROUTING_CORRIDOR_MAX_METERS');
+  }
+
+  if (violations.length > 0) {
+    throw new Error(`Invalid configuration:\n${violations.map((v) => `  - ${v}`).join('\n')}`);
+  }
 }
 
 /** Guards that are only errors in production, where a permissive default is a defect. */
@@ -232,6 +271,14 @@ function assertProductionInvariants(config: AppConfig): void {
   }
   if (config.auth.accessTokenSecret === config.auth.ipHashKey) {
     violations.push('IP_HASH_KEY must not reuse JWT_ACCESS_SECRET');
+  }
+
+  /* A placeholder routing token means every route call fails upstream with a 401
+     that surfaces as an outage. Better to refuse to start (§11). */
+  if (isInsecureSecret(config.routing.accessToken)) {
+    violations.push(
+      'MAPBOX_ROUTING_ACCESS_TOKEN is a known placeholder value and must be replaced',
+    );
   }
 
   if (violations.length > 0) {

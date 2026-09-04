@@ -191,6 +191,55 @@ never sent to Trilha's servers, and background location is never requested.
 
 ---
 
+## Routing
+
+Established in PR-03.
+
+**51. A `Route` is not a `Trail`.**
+A Route is what the road network says about getting from A to B: geometry, distance,
+duration, nothing else. It has no name, no author, no stops and no opinion. A Trail is
+a curated experience built over routes and places. Clause 9 is the same argument one
+level up, and collapsing these two is the same mistake.
+
+**52. Routing is bought through a port, never called directly.**
+Every consumer depends on the `RoutingProvider` interface. Only the adapter knows
+which provider is behind it, what its URL looks like or how it encodes a geometry. A
+provider's response shape is never the public contract.
+
+**53. Provider failure is normalised before it leaves the module.**
+Upstream status codes, vendor error strings and transport exceptions stop at the
+adapter. Callers receive Trilha's vocabulary, and the mapping distinguishes *our*
+problem from the caller's: an expired platform credential is `PROVIDER_UNAVAILABLE`,
+never a 401 the user could act on.
+
+**54. The routing credential is not the map credential.**
+The mobile SDK's public token ships inside the app by design. The routing token buys
+billable calls and is server-side only. One is world-readable; the other is a secret.
+They are never the same value.
+
+**55. A routing call is authenticated and rate-limited.**
+Routing spends money at a third party on request. An open routing endpoint is a free
+public proxy to a metered API. Ceilings are per user *and* per IP.
+
+**56. A corridor is buffered in metres, on `geography`.**
+`ST_Buffer` on a 4326 geometry reads its argument as degrees and returns a quarter of
+the planet without warning. Any distance the product asserts — buffer, containment,
+length — is computed on `geography`. Approximate conversions are permitted only for
+choosing how much detail to discard, never for a number a user sees.
+
+**57. Routes are not persisted.**
+A route is a derived answer that expires with the road network. Recording every
+calculation would build a record of where people intend to go, which nobody asked
+for and clause 50 refuses in the equivalent case. A route is stored only when a user
+deliberately saves it as part of a named artefact.
+
+**58. Route endpoints are not logged.**
+Distance, duration and vertex count are operational data. An origin and a destination
+are a statement about a person's movements. Metric labels derived from coordinates are
+the same disclosure with extra steps, and are equally forbidden.
+
+---
+
 ## Engineering
 
 **20. UTC internally.**

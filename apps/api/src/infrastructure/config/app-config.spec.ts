@@ -6,6 +6,7 @@ const validEnv = {
   REDIS_URL: 'redis://localhost:6379',
   JWT_ACCESS_SECRET: 'PPMKe3xE1YHUiJgpEsYYPMOMy6R6zUKAPuOwUv3jS7c',
   IP_HASH_KEY: 'Yh0bJ4gGLxOaAr9OMPvBGEBWWJhBQXoflb0LBIsBnh4',
+  MAPBOX_ROUTING_ACCESS_TOKEN: 'pk.test-routing-token-value-for-config-tests',
 };
 
 describe('loadAppConfig', () => {
@@ -153,10 +154,58 @@ describe('loadAppConfig', () => {
         DATABASE_POOL_MAX: '25',
         JWT_ACCESS_SECRET: 'PPMKe3xE1YHUiJgpEsYYPMOMy6R6zUKAPuOwUv3jS7c',
         IP_HASH_KEY: 'Yh0bJ4gGLxOaAr9OMPvBGEBWWJhBQXoflb0LBIsBnh4',
+        MAPBOX_ROUTING_ACCESS_TOKEN: 'pk.test-routing-token-value-for-config-tests',
         REDIS_URL: 'redis://localhost:6379',
       };
 
       expect(loadDatabaseConfig(env)).toEqual(loadAppConfig(env).database);
+    });
+  });
+
+  describe('routing configuration (PR-03)', () => {
+    const productionEnv = {
+      ...validEnv,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://trilha.app',
+      LOG_PRETTY: 'false',
+    };
+
+    it('applies documented routing defaults', () => {
+      const config = loadAppConfig({ ...validEnv });
+
+      expect(config.routing.timeoutMs).toBe(8_000);
+      expect(config.routing.corridorDefaultMeters).toBe(5_000);
+      expect(config.routing.corridorMaxMeters).toBe(20_000);
+    });
+
+    it('requires a routing token', () => {
+      const { MAPBOX_ROUTING_ACCESS_TOKEN: _omitted, ...withoutToken } = validEnv;
+      expect(() => loadAppConfig(withoutToken)).toThrow(/MAPBOX_ROUTING_ACCESS_TOKEN/);
+    });
+
+    it('refuses a placeholder routing token in production', () => {
+      expect(() =>
+        loadAppConfig({
+          ...productionEnv,
+          MAPBOX_ROUTING_ACCESS_TOKEN: 'development-only-insecure-secret-value-replace-me',
+        }),
+      ).toThrow(/MAPBOX_ROUTING_ACCESS_TOKEN is a known placeholder/);
+    });
+
+    it('refuses a default corridor wider than the maximum', () => {
+      expect(() =>
+        loadAppConfig({
+          ...validEnv,
+          ROUTING_CORRIDOR_DEFAULT_METERS: '20000',
+          ROUTING_CORRIDOR_MAX_METERS: '5000',
+        }),
+      ).toThrow(/must not exceed/);
+    });
+
+    it('rejects an unbounded provider timeout', () => {
+      expect(() => loadAppConfig({ ...validEnv, ROUTING_PROVIDER_TIMEOUT_MS: '600000' })).toThrow(
+        /Invalid environment configuration/,
+      );
     });
   });
 });

@@ -79,7 +79,7 @@ the process** with a report naming each offending field. There is no `process.en
 access anywhere else in the codebase.
 
 Production additionally refuses to start with `CORS_ORIGINS=*`, `LOG_PRETTY=true`, or
-either auth secret left at its placeholder value.
+either auth secret or the routing token left at its placeholder value.
 
 Generate real secrets before anything beyond local development:
 
@@ -94,7 +94,10 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 | `JWT_ACCESS_TTL_SECONDS` | Access token lifetime (default 600). |
 | `REFRESH_TTL_SECONDS` | Refresh token and session lifetime (default 30 days). |
 | `IP_HASH_KEY` | Key for the one-way digest of client addresses in audit records. Must differ from `JWT_ACCESS_SECRET`; raw addresses are never stored. |
-| `RATE_LIMIT_*` | Per-window ceilings for the auth endpoints. |
+| `RATE_LIMIT_*` | Per-window ceilings for the auth and routing endpoints. |
+| `MAPBOX_ROUTING_ACCESS_TOKEN` | Server-side token for the Directions API. **Not** the mobile map token — see "Routing" below. |
+| `ROUTING_PROVIDER_TIMEOUT_MS` | Upstream call ceiling (default 8000). An unbounded provider call holds a request, a connection and a socket. |
+| `ROUTING_CORRIDOR_DEFAULT_METERS` / `ROUTING_CORRIDOR_MAX_METERS` | Corridor half-width and its ceiling (defaults 5000 / 20000). Startup fails, in any environment, if the default exceeds the maximum. |
 
 ## Running the backend
 
@@ -179,6 +182,70 @@ Foreground only. Trilha asks for permission when the user taps "show my location
 centres the map, and discards the position — it is never persisted and never sent to
 the server. `ACCESS_BACKGROUND_LOCATION` is deliberately absent from the manifest.
 Denying permission leaves the map fully usable.
+
+## Routing
+
+```
+Flutter (origin + destination)  ──▶  POST /routes/calculate   (session required)
+                                          │
+                              RoutingProvider (port)  ──▶  Mapbox Directions
+                                          │
+                          PostGIS: ST_Buffer(line::geography, metres)  → corridor
+```
+
+- **The provider is behind a port** (ADR-0012). `RoutingProvider` is the only thing
+  callers depend on; nothing outside `modules/routing/infrastructure/` knows which
+  provider is in use. The generated OpenAPI document contains neither `mapbox` nor
+  `access_token`, and a test asserts it.
+- **A route is not a Trail.** Geometry, distance, duration, legs, bounds and an
+  optional corridor. No name, no author, no stops, no alternatives, no navigation.
+- **Nothing is persisted.** A route is recalculated, not recalled — PR-03 adds no
+  migration. Storing every calculation would build a record of where people intend
+  to go (constitution §57).
+- **The corridor is buffered in metres, on `geography`.** `ST_Buffer` on a 4326
+  *geometry* reads 5000 as 5000 *degrees* and silently returns ~221,000,000 km²
+  instead of ~1,128 km². The cast is the whole feature (ADR-0013).
+- **Provider errors are normalised.** `ROUTE_NOT_FOUND`, `INVALID_ROUTE_REQUEST`,
+  `PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`. An expired
+  platform credential surfaces as unavailable, never as a 401 the caller might try
+  to fix by signing in again.
+- **Endpoints are never logged**, and never appear in a metric label. Distance is
+  bucketed before it becomes a label so cardinality stays bounded.
+
+### The routing token is not the map token
+
+Two different Mapbox credentials, with two different threat models:
+
+| | Mobile map | Backend routing |
+| --- | --- | --- |
+| Variable | `MAPBOX_ACCESS_TOKEN` (`--dart-define`) | `MAPBOX_ROUTING_ACCESS_TOKEN` (`.env`) |
+| Type | Public (`pk.`) | Restricted, Directions scope only |
+| Where it lives | Inside the shipped app, world-readable by design | Server-side only |
+
+Create the routing token in the Mapbox dashboard with the **Directions** scope and
+nothing else, then:
+
+```bash
+# apps/api/.env — never committed
+MAPBOX_ROUTING_ACCESS_TOKEN=pk.your_directions_scoped_token
+```
+
+Reusing the app's map token here would put a spendable credential in an APK.
+
+### Why routing requires a session
+
+`POST /routes/calculate` sits behind `AuthGuard` and a routing-specific rate limiter
+with per-user *and* per-IP ceilings. Unlike Places, every routing call spends money at
+a third party, so an anonymous endpoint would be a free public proxy to a metered API
+— discoverable by anyone who reads the OpenAPI document.
+
+### Using it in the app
+
+Tap the directions button, choose an origin and a destination — your location, the
+centre of the map, or any Place marker — and request the route. Distance and duration
+appear as `121 km · 1h48`; the camera frames the whole line. Swapping the endpoints
+does not recalculate on its own, and clearing the route leaves the Places on the map
+untouched.
 
 ## Authentication
 
@@ -348,6 +415,21 @@ compiler`.** Xcode is older than 17. Mapbox's binary frameworks are built with S
 antimeridian. Both are rejected explicitly rather than returning a silently empty or
 very slow result.
 
+**Routing returns `PROVIDER_UNAVAILABLE` on every request.** The most likely cause is
+`MAPBOX_ROUTING_ACCESS_TOKEN`: upstream 401 and 403 are deliberately reported as
+unavailable rather than passed through, because the caller's credentials are not the
+problem. Check the token's scope includes Directions. The provider URL is never
+logged, since it carries the token.
+
+**Routing returns `INVALID_ROUTE_REQUEST` for two points that look fine.** They are
+closer than 25 m apart — below GPS noise, so there is nothing to route — or further
+apart than 5,000 km, which almost always means a latitude and longitude were swapped.
+Both are rejected before spending an upstream call.
+
+**A corridor comes back the size of a continent.** `ST_Buffer` was applied to the
+geometry rather than to `::geography`, so the width was read as degrees. See
+ADR-0013; an integration test guards against this.
+
 ## Documentation
 
 | Document | Contents |
@@ -357,6 +439,8 @@ very slow result.
 | `docs/design-foundation.md` | Palette and tokens derived from `logo.png` |
 | `docs/adr/` | Architecture decision records |
 | `apps/mobile/lib/features/README.md` | Feature-slice conventions |
+| `docs/adr/ADR-0012-…` | Why routing sits behind a port |
+| `docs/adr/ADR-0013-…` | Route geometry on the wire, and the corridor in metres |
 
 ## Contributing
 

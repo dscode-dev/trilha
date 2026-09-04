@@ -14,6 +14,12 @@ abstract interface class MapCamera {
 
   /// The viewport currently shown, or null before the map is ready.
   Future<MapBounds?> visibleBounds();
+
+  /// Frames [bounds] with padding, so a whole route is visible at once (§37).
+  ///
+  /// A fixed zoom cannot do this: the right level for a 2 km hop blanks a 400 km
+  /// drive, and vice versa.
+  Future<void> fitBounds(MapBounds bounds, {double padding = 64});
 }
 
 /// Drives a real `MapboxMap`.
@@ -40,6 +46,33 @@ class MapboxCameraAdapter implements MapCamera {
     } else {
       await _map.setCamera(options);
     }
+  }
+
+  @override
+  Future<void> fitBounds(MapBounds bounds, {double padding = 64}) async {
+    final mapbox.CameraOptions options = await _map.cameraForCoordinateBounds(
+      mapbox.CoordinateBounds(
+        southwest: mapbox.Point(
+          coordinates: mapbox.Position(bounds.west, bounds.south),
+        ),
+        northeast: mapbox.Point(
+          coordinates: mapbox.Position(bounds.east, bounds.north),
+        ),
+        infiniteBounds: false,
+      ),
+      mapbox.MbxEdgeInsets(
+        top: padding,
+        left: padding,
+        bottom: padding,
+        right: padding,
+      ),
+      null,
+      null,
+      null,
+      null,
+    );
+
+    await _map.flyTo(options, mapbox.MapAnimationOptions(duration: 700));
   }
 
   @override

@@ -7,6 +7,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 import '../../../app/config/map_config.dart';
 import '../../../app/theme/app_radius.dart';
 import '../../../app/theme/app_spacing.dart';
+import '../../../app/theme/app_colors.dart';
 import '../../places/application/places_providers.dart';
 import '../../places/domain/place.dart';
 import '../../places/presentation/contribute_place_screen.dart';
@@ -14,6 +15,12 @@ import '../../places/presentation/place_detail_sheet.dart';
 import '../../places/presentation/place_search_bar.dart';
 import '../application/location_service.dart';
 import '../application/map_state.dart';
+import '../../routing/application/routing_controller.dart';
+import '../../routing/application/routing_providers.dart';
+import '../../routing/application/routing_state.dart';
+import '../../routing/domain/route.dart';
+import '../../routing/presentation/route_overlay.dart';
+import '../../routing/presentation/route_panel.dart';
 import 'map_camera.dart';
 import 'map_unavailable.dart';
 
@@ -32,6 +39,10 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   mapbox.PointAnnotationManager? _markers;
   MapCamera? _camera;
+  RouteOverlay? _routeOverlay;
+
+  /// Which endpoint the next selection fills. Null when not building a route.
+  _EndpointSlot? _awaitingSelection;
 
   /// Maps an annotation back to the Place it represents, so a tap can resolve one.
   final Map<String, String> _annotationToPlaceId = <String, String>{};
@@ -56,6 +67,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Future<void> _onMapCreated(mapbox.MapboxMap map) async {
     _camera = MapboxCameraAdapter(map);
     _markers = await map.annotations.createPointAnnotationManager();
+
+    final mapbox.PolylineAnnotationManager polylines = await map.annotations
+        .createPolylineAnnotationManager();
+    final mapbox.PointAnnotationManager endpointMarkers = await map.annotations
+        .createPointAnnotationManager();
+    _routeOverlay = MapboxRouteOverlay(
+      polylines: polylines,
+      /* A separate manager from the Place markers, so clearing a route cannot
+         remove Places from the map (§41). */
+      markers: endpointMarkers,
+      lineColor: AppColors.brandGreen.toARGB32(),
+    );
 
     /* `tapEvents` supersedes the listener-object API, which 2.30 deprecates. */
     _markers?.tapEvents(onTap: _onMarkerTapped);
@@ -88,8 +111,122 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final String? placeId = _annotationToPlaceId[annotation.id];
     if (placeId == null) return;
 
+    /* While a route endpoint is being chosen, tapping a Place selects it as that
+       endpoint rather than opening its details (§34). */
+    final _EndpointSlot? slot = _awaitingSelection;
+    if (slot != null) {
+      final PlaceMapItem? place = ref
+          .read(mapControllerProvider)
+          .places
+          .where((PlaceMapItem p) => p.id == placeId)
+          .firstOrNull;
+
+      if (place != null) {
+        _assignEndpoint(
+          slot,
+          RouteEndpoint(
+            position: place.position,
+            placeId: place.id,
+            label: place.name,
+          ),
+        );
+        return;
+      }
+    }
+
     ref.read(mapControllerProvider.notifier).select(placeId);
     unawaited(_showPlaceSheet(placeId));
+  }
+
+  /// Fills the pending endpoint slot and leaves selection mode.
+  void _assignEndpoint(_EndpointSlot slot, RouteEndpoint endpoint) {
+    final RoutingController routing = ref.read(
+      routingControllerProvider.notifier,
+    );
+    switch (slot) {
+      case _EndpointSlot.origin:
+        routing.setOrigin(endpoint);
+      case _EndpointSlot.destination:
+        routing.setDestination(endpoint);
+    }
+    setState(() => _awaitingSelection = null);
+  }
+
+  /// Offers the ways an endpoint can be chosen (§33, §34).
+  Future<void> _pickEndpoint(_EndpointSlot slot) async {
+    setState(() => _awaitingSelection = slot);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (slot == _EndpointSlot.origin)
+              ListTile(
+                leading: const Icon(Icons.my_location),
+                title: const Text('Use my location'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_useCurrentLocation());
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.center_focus_strong),
+              title: const Text('Use the centre of the map'),
+              subtitle: const Text('Drag the map first, then pick this'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(_useMapCentre(slot));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.place_outlined),
+              title: const Text('Tap a place on the map'),
+              subtitle: const Text('Close this and tap any marker'),
+              onTap: () => Navigator.of(sheetContext).pop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _useCurrentLocation() async {
+    final bool located = await ref
+        .read(routingControllerProvider.notifier)
+        .useCurrentLocationAsOrigin();
+
+    if (!mounted) return;
+    setState(() => _awaitingSelection = null);
+
+    if (!located) {
+      /* Location is unavailable, but route building is not blocked: the user can
+         still pick a point on the map (§33). */
+      _explainLocationState();
+      return;
+    }
+
+    final LatLng? position = ref.read(mapControllerProvider).userPosition;
+    if (position != null) {
+      await _camera?.moveTo(position, zoom: MapConfig.focusedZoom);
+    }
+  }
+
+  Future<void> _useMapCentre(_EndpointSlot slot) async {
+    final MapBounds? bounds = await _camera?.visibleBounds();
+    if (!mounted || bounds == null) return;
+
+    _assignEndpoint(
+      slot,
+      RouteEndpoint(
+        position: LatLng(
+          latitude: (bounds.north + bounds.south) / 2,
+          longitude: (bounds.east + bounds.west) / 2,
+        ),
+      ),
+    );
   }
 
   Future<void> _showPlaceSheet(String placeId) async {
@@ -181,11 +318,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (!MapConfig.hasAccessToken) return const MapUnavailable();
 
     final MapState state = ref.watch(mapControllerProvider);
+    final RoutingState routing = ref.watch(routingControllerProvider);
+    /* Route mode starts at the moment the user asks for it, before an endpoint
+       exists, so the panel is there to receive the first selection. */
+    final bool routeMode = routing.isActive || _awaitingSelection != null;
+
     ref.listen<MapState>(mapControllerProvider, (
       MapState? previous,
       MapState next,
     ) {
       if (previous?.places != next.places) unawaited(_syncMarkers(next.places));
+    });
+
+    /* Drawing follows state rather than being commanded from a button handler, so a
+       route cleared by any path also disappears from the map (§41, §44). */
+    ref.listen<RoutingState>(routingControllerProvider, (
+      RoutingState? previous,
+      RoutingState next,
+    ) {
+      if (previous?.routeOrNull == next.routeOrNull) return;
+      unawaited(_syncRoute(next.routeOrNull));
     });
 
     return Scaffold(
@@ -211,13 +363,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
-          /* Search floats over the map rather than pushing it down (§39). */
+          /* Search floats over the map rather than pushing it down (§39). While a
+             route is being built the panel replaces it, so the two never compete. */
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: PlaceSearchBar(
-                onSelected: (PlaceListItem p) => unawaited(_focusOn(p)),
-              ),
+              child: routeMode
+                  ? RoutePanel(
+                      onPickOrigin: () =>
+                          unawaited(_pickEndpoint(_EndpointSlot.origin)),
+                      onPickDestination: () =>
+                          unawaited(_pickEndpoint(_EndpointSlot.destination)),
+                    )
+                  : PlaceSearchBar(
+                      onSelected: (PlaceListItem p) => unawaited(_focusOn(p)),
+                    ),
             ),
           ),
 
@@ -257,6 +417,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
+                FloatingActionButton.small(
+                  heroTag: 'plan-route',
+                  tooltip: routeMode ? 'Close route planning' : 'Plan a route',
+                  onPressed: () {
+                    if (routeMode) {
+                      ref.read(routingControllerProvider.notifier).reset();
+                      setState(() => _awaitingSelection = null);
+                    } else {
+                      unawaited(_pickEndpoint(_EndpointSlot.origin));
+                    }
+                  },
+                  child: Icon(routeMode ? Icons.close : Icons.directions),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 FloatingActionButton(
                   heroTag: 'add-place',
                   tooltip: 'Add a place',
@@ -269,6 +443,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ],
       ),
     );
+  }
+
+  /// Draws or clears the route, and frames it when one appears (§37).
+  Future<void> _syncRoute(TrilhaRoute? route) async {
+    final RouteOverlay? overlay = _routeOverlay;
+    if (overlay == null) return;
+
+    if (route == null) {
+      await overlay.clearRoute();
+      return;
+    }
+
+    await overlay.drawRoute(route);
+    /* Bounds come from the geometry, so the whole route fits whatever its length —
+       a fixed zoom would blank a long drive and over-zoom a short one. */
+    await _camera?.fitBounds(route.bounds);
   }
 
   Future<void> _startContribution() async {
@@ -296,6 +486,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (mounted) await _queryVisibleViewport();
   }
 }
+
+/// Which route endpoint a pending selection will fill.
+enum _EndpointSlot { origin, destination }
 
 /// A thin progress line, so refreshing markers never blocks the map (§57).
 class _DiscreteLoadingBar extends StatelessWidget {

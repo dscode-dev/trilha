@@ -88,6 +88,28 @@ export const envSchema = z.object({
   RATE_LIMIT_PASSWORD_PER_USER: z.coerce.number().int().min(1).default(10),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(10).max(3_600).default(900),
 
+  /* --- Routing (PR-03) ------------------------------------------------------ */
+  /**
+   * Server-side token for the Directions API.
+   *
+   * Deliberately distinct from the mobile map token (§11). The client token is
+   * public by design and ships inside the app; this one is used from the server and
+   * is billed against Trilha's routing quota, so the two must be rotatable and
+   * scopable independently.
+   */
+  MAPBOX_ROUTING_ACCESS_TOKEN: z.string().min(1),
+
+  /** Upstream deadline. A routing call must never hold a request open (§23). */
+  ROUTING_PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(8_000),
+
+  /** Half-width of the corridor buffered around a route, in metres (§19). */
+  ROUTING_CORRIDOR_DEFAULT_METERS: z.coerce.number().int().min(100).max(50_000).default(5_000),
+  ROUTING_CORRIDOR_MAX_METERS: z.coerce.number().int().min(100).max(50_000).default(20_000),
+
+  /* Routing costs money per call, so it gets its own ceilings (§27). */
+  RATE_LIMIT_ROUTING_PER_USER: z.coerce.number().int().min(1).default(60),
+  RATE_LIMIT_ROUTING_PER_IP: z.coerce.number().int().min(1).default(120),
+
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   /** Human-readable log output. Intended for local development only. */
   LOG_PRETTY: booleanFromEnv(false),

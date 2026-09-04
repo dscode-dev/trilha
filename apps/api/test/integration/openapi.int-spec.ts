@@ -52,7 +52,7 @@ describe('OpenAPI document', () => {
    * accidentally-shipped route fail a build rather than pass review.
    */
   it('exposes no endpoints for domains that are still frozen', () => {
-    const frozen = /(trail|route|review|rating|safety|event|suggestion|feed|badge|follower)/i;
+    const frozen = /(trail|review|rating|safety|event|suggestion|feed|badge|follower)/i;
     expect(Object.keys(document.paths).filter((path) => frozen.test(path))).toEqual([]);
   });
 
@@ -67,6 +67,30 @@ describe('OpenAPI document', () => {
         '/api/v1/places/{id}',
       ]),
     );
+  });
+
+  it('documents the routing domain introduced by PR-03', () => {
+    expect(Object.keys(document.paths)).toEqual(
+      expect.arrayContaining(['/api/v1/routes/calculate']),
+    );
+  });
+
+  it('documents routing as authenticated and able to fail upstream', () => {
+    const calculate = document.paths['/api/v1/routes/calculate']?.post;
+
+    expect(JSON.stringify(calculate?.security ?? [])).toMatch(/bearer/i);
+    /* Upstream failures are part of the contract, not surprises. */
+    expect(Object.keys(calculate?.responses ?? {})).toEqual(
+      expect.arrayContaining(['200', '400', '401', '422', '429', '502', '504']),
+    );
+  });
+
+  it('keeps the routing contract free of provider vocabulary (§64)', () => {
+    const serialised = JSON.stringify(document);
+
+    /* A change of routing supplier must not be a change to the published contract. */
+    expect(serialised.toLowerCase()).not.toContain('mapbox');
+    expect(serialised).not.toContain('access_token');
   });
 
   it('documents the map query as able to reject a bad viewport', () => {

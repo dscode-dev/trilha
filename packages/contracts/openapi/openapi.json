@@ -676,6 +676,104 @@
           "places"
         ]
       }
+    },
+    "/api/v1/routes/calculate": {
+      "post": {
+        "description": "Returns a normalised route between two points: GeoJSON geometry, distance in metres, duration in seconds, bounds computed from the geometry, and legs. Driving only in V1. Nothing is persisted — a route is a computation, not a record.",
+        "operationId": "RoutesController_calculate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculateRouteRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid coordinates, or endpoints too close together or too far apart.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No driving route connects the two points.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The routing provider is unavailable or returned an unusable result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The routing provider exceeded its deadline.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Calculate a driving route",
+        "tags": [
+          "routing"
+        ]
+      }
     }
   },
   "info": {
@@ -875,6 +973,11 @@
               "INVALID_TOKEN",
               "SESSION_EXPIRED",
               "ACCOUNT_DISABLED",
+              "ROUTE_NOT_FOUND",
+              "INVALID_ROUTE_REQUEST",
+              "PROVIDER_TIMEOUT",
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_RATE_LIMITED",
               "INTERNAL_ERROR",
               "SERVICE_UNAVAILABLE",
               "DEPENDENCY_UNAVAILABLE"
@@ -1370,6 +1473,218 @@
         "required": [
           "place",
           "possibleDuplicates"
+        ]
+      },
+      "RouteEndpointDto": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "example": -8.0631
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "example": -34.8711
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Set when this endpoint came from a Place. Routing never requires one."
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ]
+      },
+      "CalculateRouteRequestDto": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/RouteEndpointDto"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/RouteEndpointDto"
+          },
+          "corridorWidthMeters": {
+            "type": "number",
+            "minimum": 100,
+            "maximum": 50000,
+            "description": "Corridor half-width in metres. Clamped to the server maximum.",
+            "example": 5000
+          },
+          "includeCorridor": {
+            "type": "boolean",
+            "default": false,
+            "description": "Return the corridor polygon. Off by default: it is a large geometry that clients do not draw."
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ]
+      },
+      "RouteGeometryDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "LineString"
+            ],
+            "example": "LineString"
+          },
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "description": "GeoJSON positions as [longitude, latitude] — GeoJSON axis order.",
+            "example": [
+              [
+                -34.8711,
+                -8.0631
+              ],
+              [
+                -34.8631,
+                -7.115
+              ]
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "coordinates"
+        ]
+      },
+      "RouteBoundsDto": {
+        "type": "object",
+        "properties": {
+          "north": {
+            "type": "number",
+            "example": -7.115
+          },
+          "south": {
+            "type": "number",
+            "example": -8.0631
+          },
+          "east": {
+            "type": "number",
+            "example": -34.8631
+          },
+          "west": {
+            "type": "number",
+            "example": -34.8711
+          }
+        },
+        "required": [
+          "north",
+          "south",
+          "east",
+          "west"
+        ]
+      },
+      "RouteLegDto": {
+        "type": "object",
+        "properties": {
+          "distanceMeters": {
+            "type": "number",
+            "example": 105060
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 6480
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true,
+            "example": "BR-101"
+          }
+        },
+        "required": [
+          "distanceMeters",
+          "durationSeconds",
+          "summary"
+        ]
+      },
+      "RouteCorridorDto": {
+        "type": "object",
+        "properties": {
+          "widthMeters": {
+            "type": "number",
+            "example": 5000
+          },
+          "geometry": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "GeoJSON Polygon or MultiPolygon covering the area around the route."
+          }
+        },
+        "required": [
+          "widthMeters",
+          "geometry"
+        ]
+      },
+      "RouteResponseDto": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/RouteEndpointDto"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/RouteEndpointDto"
+          },
+          "geometry": {
+            "$ref": "#/components/schemas/RouteGeometryDto"
+          },
+          "distanceMeters": {
+            "type": "number",
+            "example": 105060,
+            "description": "Road distance in metres."
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 6480,
+            "description": "Estimated driving time in seconds."
+          },
+          "bounds": {
+            "$ref": "#/components/schemas/RouteBoundsDto"
+          },
+          "legs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RouteLegDto"
+            }
+          },
+          "corridor": {
+            "nullable": true,
+            "description": "Present only when includeCorridor was requested.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RouteCorridorDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "origin",
+          "destination",
+          "geometry",
+          "distanceMeters",
+          "durationSeconds",
+          "bounds",
+          "legs",
+          "corridor"
         ]
       }
     }

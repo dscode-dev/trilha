@@ -25,6 +25,13 @@ enum FailureKind {
   /// instance. Never surfaced to the user: nothing went wrong.
   cancelled,
 
+  /// The request was fine but no route connects the two points.
+  notRoutable,
+
+  /// An upstream service Trilha depends on is down or timed out. Distinct from
+  /// [networkUnavailable]: the user's connection is fine, ours is not.
+  providerUnavailable,
+
   unknown,
 }
 
@@ -53,6 +60,12 @@ class AppFailure extends Equatable implements Exception {
         'TOO_MANY_REQUESTS' => FailureKind.rateLimited,
         'SESSION_EXPIRED' || 'INVALID_TOKEN' => FailureKind.sessionExpired,
         'ACCOUNT_DISABLED' => FailureKind.accountDisabled,
+        /* Routing (PR-03). */
+        'ROUTE_NOT_FOUND' => FailureKind.notRoutable,
+        'INVALID_ROUTE_REQUEST' => FailureKind.validation,
+        'PROVIDER_TIMEOUT' ||
+        'PROVIDER_UNAVAILABLE' ||
+        'PROVIDER_RATE_LIMITED' => FailureKind.providerUnavailable,
         _ => _fromTransport(error.kind),
       };
 
@@ -88,8 +101,13 @@ class AppFailure extends Equatable implements Exception {
   final int? retryAfterSeconds;
 
   /// Whether the same input could plausibly succeed on a retry.
+  ///
+  /// An upstream outage is retryable; "no route exists between these points" is not,
+  /// however many times it is asked.
   bool get isRetryable =>
-      kind == FailureKind.networkUnavailable || kind == FailureKind.unknown;
+      kind == FailureKind.networkUnavailable ||
+      kind == FailureKind.providerUnavailable ||
+      kind == FailureKind.unknown;
 
   @override
   List<Object?> get props => <Object?>[kind, message, retryAfterSeconds];
