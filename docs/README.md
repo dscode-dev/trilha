@@ -18,6 +18,8 @@
 | [ADR-0005](adr/ADR-0005-riverpod.md) | Riverpod for composition, DI and state — not as architecture |
 | [ADR-0006](adr/ADR-0006-api-contract-strategy.md) | Generated OpenAPI as the API contract |
 | [ADR-0007](adr/ADR-0007-typescript-esm-toolchain.md) | ESM, TypeScript 6 and Vitest for the API |
+| [ADR-0008](adr/ADR-0008-authentication-session-model.md) | Account, credential, profile and session as separate concerns |
+| [ADR-0009](adr/ADR-0009-refresh-token-rotation.md) | Single-use refresh rotation with database-enforced concurrency |
 
 ## Writing an ADR
 

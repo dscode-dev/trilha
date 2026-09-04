@@ -1,6 +1,6 @@
 # Technology baseline
 
-**Verified at: 2026-09-04**
+**Verified at: 2026-09-04** (PR-00 foundation, PR-01 identity)
 
 Every version below was checked against its upstream registry at implementation time
 (npm registry, pub.dev, nodejs.org, Docker Hub, the Flutter release channel) — not
@@ -41,6 +41,14 @@ Re-verify this table at the start of each dependency review and update
 | Helmet | 8.3.0 | **8.3.0** | npm | Security headers. |
 | OpenTelemetry SDK / auto-instrumentations / OTLP HTTP exporter | 0.222.0 / 0.80.0 / 0.222.0 | **same** | npm | Opt-in tracing. The OTel JS SDK is pre-1.0 by upstream convention; this is its stable release line. |
 | Sentry | 10.73.0 | **`@sentry/node` 10.73.0** | npm | `@sentry/nestjs@10` declares a peer of NestJS 8–11 and does **not** support NestJS 12. The framework-agnostic SDK has no peer conflict and is wired at the infrastructure boundary only. |
+| `@node-rs/argon2` | 2.2.0 | **2.2.0** | npm | Argon2id (ADR-0008). Rust binding with musl prebuilds, so the Alpine image needs no `node-gyp` toolchain. |
+| `jose` | 6.2.11 | **6.2.11** | npm | JWT signing/verification. ESM-native, matching ADR-0007; explicit issuer/audience validation. |
+
+> **Rate limiting is hand-rolled.** `@nestjs/throttler@6.5.0` declares a peer range of
+> NestJS 7–11 and does not support NestJS 12 — the same situation as `@sentry/nestjs`.
+> The replacement is one Lua script in
+> `src/infrastructure/rate-limit/rate-limiter.service.ts`; the dependency was buying
+> very little. Revisit when a NestJS 12-compatible release ships.
 
 ## Backend tooling
 
@@ -76,6 +84,16 @@ Re-verify this table at the start of each dependency review and update
 | dio | 5.11.1 | **5.11.1** | pub.dev | HTTP client with interceptors, typed errors, cancellation. |
 | equatable | 2.1.0 | **2.1.0** | pub.dev | Value equality without hand-written `==`. |
 | flutter_lints | 6.0.0 | **6.0.0** | pub.dev | Lint baseline, extended in `analysis_options.yaml`. |
+| flutter_secure_storage | 11.0.0 | **11.0.0** | pub.dev | Keychain / Keystore-backed refresh-token storage (constitution §38). |
+
+> **`compileSdk` is pinned to 37** in `android/app/build.gradle.kts`.
+> `flutter_secure_storage@11`'s AAR declares a minimum compile SDK of 37 and the build
+> fails outright against Flutter's default of 36. Raising the pin requires the matching
+> Android SDK platform to be installed.
+>
+> **`flutter_secure_storage@11` changed its Android options API**: `encryptedSharedPreferences`
+> is gone, and the constructor defaults are now the hardened path (AES-GCM data
+> encryption with RSA-OAEP key wrapping in the Keystore).
 
 ## CI
 
@@ -108,3 +126,4 @@ PostgreSQL 19 (beta), Drizzle ORM 1.0 (beta), TypeScript 7.1 (dev).
 | Node.js | 26.8.1 | 24.20.0 | Production tracks LTS, not Current | Node 26 enters LTS (expected Oct 2026) |
 | Drizzle ORM | 1.0.0-beta | 0.45.2 | Constitution §26 forbids beta | Drizzle 1.0 stable |
 | Sentry for Nest | `@sentry/nestjs` 10.73.0 | `@sentry/node` 10.73.0 | `@sentry/nestjs` does not support NestJS 12 | `@sentry/nestjs` adds a NestJS 12 peer |
+| Rate limiting | `@nestjs/throttler` 6.5.0 | hand-rolled Redis limiter | `@nestjs/throttler` does not support NestJS 12 | `@nestjs/throttler` adds a NestJS 12 peer |

@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../app/theme/app_spacing.dart';
 import '../../../shared/widgets/trilha_logo.dart';
 
-/// The application's root surface (§22).
+/// The launch surface.
 ///
-/// Its purpose is to prove the foundation end to end — bootstrap, theming, asset
-/// loading, navigation and a real render — while showing nothing that pretends to be
-/// a product feature. There are no trails, places, maps, stats or users here, because
-/// none of those exist yet and fabricating them would misrepresent the build.
+/// Shown only while the app decides whether a stored session can be restored. The
+/// router holds here during `AuthBootstrapping` and redirects the moment that
+/// resolves, so a returning user never sees the sign-in screen flash before their
+/// session loads (§36).
 class RootScreen extends StatelessWidget {
   const RootScreen({super.key});
 
@@ -41,11 +41,20 @@ class RootScreen extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Foundation ready.',
-                    style: theme.textTheme.bodyLarge,
-                    textAlign: TextAlign.center,
+                  const SizedBox(height: AppSpacing.lg),
+                  const SizedBox(
+                    height: AppSpacing.lg,
+                    width: AppSpacing.lg,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      'Getting things ready…',
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),

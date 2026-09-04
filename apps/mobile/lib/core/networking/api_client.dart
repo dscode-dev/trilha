@@ -47,11 +47,13 @@ class ApiClient {
   Future<T> get<T>(
     String path, {
     Map<String, dynamic>? queryParameters,
+    Options? options,
     CancelToken? cancelToken,
   }) => _send<T>(
     () => _dio.get<T>(
       path,
       queryParameters: queryParameters,
+      options: options,
       cancelToken: cancelToken,
     ),
   );
@@ -60,12 +62,30 @@ class ApiClient {
     String path, {
     Object? data,
     Map<String, dynamic>? queryParameters,
+    Options? options,
     CancelToken? cancelToken,
   }) => _send<T>(
     () => _dio.post<T>(
       path,
       data: data,
       queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    ),
+  );
+
+  Future<T> patch<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) => _send<T>(
+    () => _dio.patch<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
       cancelToken: cancelToken,
     ),
   );
@@ -77,6 +97,11 @@ class ApiClient {
       final T? data = response.data;
 
       if (data == null) {
+        // 204 and 205 carry no body by definition; a caller expecting void is
+        // satisfied, and anything else is a genuine contract violation.
+        if (response.statusCode == 204 || response.statusCode == 205) {
+          return null as T;
+        }
         throw ApiException(
           kind: AppErrorKind.server,
           message: 'Trilha returned an empty response.',

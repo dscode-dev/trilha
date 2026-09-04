@@ -3,9 +3,10 @@
 Geospatial trail platform. Flutter client, NestJS modular-monolith API, PostgreSQL +
 PostGIS, Redis.
 
-**Current state: PR-00 — foundation only.** There are no product features yet. The API
-serves liveness and readiness; the app renders one institutional root surface. That is
-deliberate — see `docs/constitution.md`.
+**Current state: PR-01 — identity, session and profile.** A person can create an
+account, stay signed in across restarts, edit their profile, change their password and
+sign out. No other product domain exists yet — that is deliberate, see
+`docs/constitution.md`.
 
 ## Requirements
 
@@ -75,7 +76,23 @@ Configuration is validated by Zod at startup: a missing or malformed variable **
 the process** with a report naming each offending field. There is no `process.env`
 access anywhere else in the codebase.
 
-Production additionally refuses to start with `CORS_ORIGINS=*` or `LOG_PRETTY=true`.
+Production additionally refuses to start with `CORS_ORIGINS=*`, `LOG_PRETTY=true`, or
+either auth secret left at its placeholder value.
+
+Generate real secrets before anything beyond local development:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+```
+
+| Variable | Purpose |
+| --- | --- |
+| `JWT_ACCESS_SECRET` | HMAC key for access tokens. Never generated at boot — a per-instance secret would invalidate every token on restart. |
+| `JWT_ISSUER` / `JWT_AUDIENCE` | Validated on every token; a token minted for another audience is rejected. |
+| `JWT_ACCESS_TTL_SECONDS` | Access token lifetime (default 600). |
+| `REFRESH_TTL_SECONDS` | Refresh token and session lifetime (default 30 days). |
+| `IP_HASH_KEY` | Key for the one-way digest of client addresses in audit records. Must differ from `JWT_ACCESS_SECRET`; raw addresses are never stored. |
+| `RATE_LIMIT_*` | Per-window ceilings for the auth endpoints. |
 
 ## Running the backend
 
@@ -95,11 +112,45 @@ make up
 make logs
 ```
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/v1/health` | Liveness. Touches no dependency; 200 while the process runs. |
-| `GET /api/v1/ready` | Readiness. Probes PostgreSQL and Redis; **503** if either is down. |
-| `GET /docs` | OpenAPI UI, when `SWAGGER_ENABLED=true`. |
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/health` | Liveness. Touches no dependency; 200 while the process runs. |
+| GET | `/api/v1/ready` | Readiness. Probes PostgreSQL and Redis; **503** if either is down. |
+| POST | `/api/v1/auth/register` | Create an account and sign it in. |
+| POST | `/api/v1/auth/login` | Sign in. Identical answer for unknown account and wrong password. |
+| POST | `/api/v1/auth/refresh` | Rotate the session tokens. Single-use. |
+| POST | `/api/v1/auth/logout` | End the current session. |
+| POST | `/api/v1/auth/logout-all` | End every session, this one included. |
+| GET | `/api/v1/me` | The authenticated account and profile. |
+| PATCH | `/api/v1/me/profile` | Update displayName, username or bio. |
+| POST | `/api/v1/me/change-password` | Change the password; revokes every session. |
+| GET | `/docs` | OpenAPI UI, when `SWAGGER_ENABLED=true`. |
+
+## Authentication
+
+```
+register / login  ──▶  access token (JWT, 10 min, in memory)
+                       refresh token (opaque, 30 days, secure storage)
+
+access expires    ──▶  POST /auth/refresh  ──▶  new pair, old refresh consumed
+old refresh replayed ─▶ session revoked + audited  (treated as compromise)
+```
+
+- **Access tokens** are short-lived HS256 JWTs carrying only `sub`, `sid`, `iss`,
+  `aud`, `iat`, `exp`. The guard also verifies the session is still live, so logout
+  takes effect immediately for both refresh and access.
+- **Refresh tokens** are 256-bit random values. Only a SHA-256 digest is stored.
+  Rotation is single-use, and concurrency is settled by a conditional `UPDATE` in
+  PostgreSQL — two simultaneous refreshes cannot both succeed.
+- **Reusing a rotated token revokes the whole session** and writes
+  `REFRESH_REUSE_DETECTED` to the audit trail. See `docs/adr/ADR-0009-refresh-token-rotation.md`.
+- **Passwords** use Argon2id at `m=46 MiB, t=3, p=1` (benchmarked; ADR-0008).
+- **Rate limiting** is Redis-backed and distributed. Login is limited per source *and*
+  per source+account — never per account alone, which would let anyone lock out any
+  user.
+
+**Password reset is not implemented.** It needs email delivery, which does not exist
+yet, and §25 rules out a fake token flow. Tracked as `V1_FUTURE_PR`.
 
 ## Running the app
 
@@ -133,6 +184,9 @@ Rebuilding from empty:
 make clean && make up
 ```
 
+Migrations are applied in order from `0000`; PR-01's `0001_identity` runs cleanly on
+both an empty database and one already carrying PR-00's schema.
+
 ## Tests
 
 ```bash
@@ -148,8 +202,12 @@ flutter test
 
 Integration tests use real PostgreSQL, PostGIS and Redis. They deliberately do not mock
 the dependencies they exist to prove — including a genuine geodesic distance
-calculation, a GIST-indexed spatial query, and readiness returning 503 against a closed
-port.
+calculation, a GIST-indexed spatial query, readiness returning 503 against a closed
+port, and refresh rotation under 50-way concurrency over real sockets.
+
+Mobile tests fake only the HTTP boundary and secure storage, since a test binding has
+neither a network nor a Keychain. Everything above those two seams — the controller,
+the router, the screens — is the production code.
 
 ## Lint, format, typecheck
 
@@ -209,6 +267,16 @@ Tools* via Android Studio's SDK Manager, then `flutter doctor --android-licenses
 
 **`npm ci` warns `EBADENGINE`.** The local Node is not 24.x. `nvm use` picks up
 `.nvmrc`.
+
+**API exits with `JWT_ACCESS_SECRET is a known placeholder value`.** Working as
+intended: production refuses the example secrets. Generate real ones (see Environment).
+
+**Android build fails with `requires … version 37 or later of the Android APIs`.**
+`flutter_secure_storage` needs `compileSdk 37`; install that SDK platform via Android
+Studio's SDK Manager. The pin lives in `apps/mobile/android/app/build.gradle.kts`.
+
+**Signed in, then everything returns 401.** Expected after a password change or
+`logout-all`: every session is revoked by design. Sign in again.
 
 ## Documentation
 

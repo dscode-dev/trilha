@@ -74,6 +74,17 @@ services:
       LOG_PRETTY: 'false'
       SWAGGER_ENABLED: 'true'
       CORS_ORIGINS: '*'
+
+      # Development-only secrets. These are placeholders on purpose: the API
+      # rejects them outright when NODE_ENV=production, so this stack cannot be
+      # promoted to a deployment by accident. Override with real values via the
+      # shell or an env file for anything beyond local work.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-development-only-insecure-secret-value-replace-me}
+      JWT_ISSUER: ${JWT_ISSUER:-trilha-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-trilha-mobile}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-600}
+      REFRESH_TTL_SECONDS: ${REFRESH_TTL_SECONDS:-2592000}
+      IP_HASH_KEY: ${IP_HASH_KEY:-development-only-insecure-secret-value-for-ip-hashing}
     ports:
       - '${API_PORT:-3000}:3000'
     # Applies migrations, then serves. Migrations are explicit and must succeed

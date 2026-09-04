@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "app.trilha.trilha_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned rather than inherited from the Flutter default (36): the
+    // flutter_secure_storage AAR declares a minimum compile SDK of 37, and the
+    // build fails outright below it. Raise this only with a matching SDK installed.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

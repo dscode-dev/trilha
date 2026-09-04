@@ -14,6 +14,19 @@ export const ErrorCode = {
   PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
   UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
   TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+  /* --- Identity & session (PR-01) --- */
+  /** Login failed. Deliberately identical for unknown account and wrong password (§27). */
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  EMAIL_ALREADY_IN_USE: 'EMAIL_ALREADY_IN_USE',
+  USERNAME_ALREADY_IN_USE: 'USERNAME_ALREADY_IN_USE',
+  WEAK_PASSWORD: 'WEAK_PASSWORD',
+  /** Access token missing, malformed, expired, or issued for another audience. */
+  INVALID_TOKEN: 'INVALID_TOKEN',
+  /** The session behind a refresh token is revoked, expired, or gone. */
+  SESSION_EXPIRED: 'SESSION_EXPIRED',
+  /** Account exists but is not permitted to authenticate. */
+  ACCOUNT_DISABLED: 'ACCOUNT_DISABLED',
+
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',

@@ -12,20 +12,22 @@ import { argv } from 'node:process';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
-import { loadAppConfig } from '../config/app-config.js';
+import { loadDatabaseConfig } from '../config/app-config.js';
 
 /** Migrations live beside this file, both in `src` and in the compiled `dist`. */
 export const MIGRATIONS_FOLDER = resolve(import.meta.dirname, 'migrations');
 
 export async function runMigrations(): Promise<void> {
-  const config = loadAppConfig(process.env);
+  /* Only the database settings: applying migrations must not require an unrelated
+     credential such as the JWT signing key. */
+  const database = loadDatabaseConfig(process.env);
 
   const pool = new Pool({
-    connectionString: config.database.url,
+    connectionString: database.url,
     /* A migration run is short-lived and strictly serial. */
     max: 1,
-    connectionTimeoutMillis: config.database.connectTimeoutMs,
-    ...(config.database.ssl ? { ssl: { rejectUnauthorized: true } } : {}),
+    connectionTimeoutMillis: database.connectTimeoutMs,
+    ...(database.ssl ? { ssl: { rejectUnauthorized: true } } : {}),
   });
 
   try {

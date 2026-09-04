@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { envSchema, type Env, type NodeEnvironment } from './env.schema.js';
+import { INSECURE_SECRETS, envSchema, type Env, type NodeEnvironment } from './env.schema.js';
 
 /**
  * Structured, immutable view over validated environment variables.
@@ -40,6 +40,25 @@ export interface DocsConfig {
   readonly path: string;
 }
 
+export interface AuthConfig {
+  readonly accessTokenSecret: string;
+  readonly issuer: string;
+  readonly audience: string;
+  readonly accessTokenTtlSeconds: number;
+  readonly refreshTokenTtlSeconds: number;
+  readonly ipHashKey: string;
+}
+
+/** Per-window ceilings for the authentication endpoints (§26). */
+export interface RateLimitConfig {
+  readonly windowSeconds: number;
+  readonly loginPerIp: number;
+  readonly loginPerAccount: number;
+  readonly registerPerIp: number;
+  readonly refreshPerIp: number;
+  readonly passwordPerUser: number;
+}
+
 export interface ObservabilityConfig {
   readonly sentryDsn: string | undefined;
   readonly sentryTracesSampleRate: number;
@@ -56,6 +75,8 @@ export class AppConfig {
   readonly redis: RedisConfig;
   readonly logging: LoggingConfig;
   readonly docs: DocsConfig;
+  readonly auth: AuthConfig;
+  readonly rateLimit: RateLimitConfig;
   readonly observability: ObservabilityConfig;
 
   constructor(env: Env) {
@@ -87,6 +108,24 @@ export class AppConfig {
     this.logging = { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY };
     this.docs = { enabled: env.SWAGGER_ENABLED, path: env.SWAGGER_PATH };
 
+    this.auth = {
+      accessTokenSecret: env.JWT_ACCESS_SECRET,
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
+      accessTokenTtlSeconds: env.JWT_ACCESS_TTL_SECONDS,
+      refreshTokenTtlSeconds: env.REFRESH_TTL_SECONDS,
+      ipHashKey: env.IP_HASH_KEY,
+    };
+
+    this.rateLimit = {
+      windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS,
+      loginPerIp: env.RATE_LIMIT_LOGIN_PER_IP,
+      loginPerAccount: env.RATE_LIMIT_LOGIN_PER_ACCOUNT,
+      registerPerIp: env.RATE_LIMIT_REGISTER_PER_IP,
+      refreshPerIp: env.RATE_LIMIT_REFRESH_PER_IP,
+      passwordPerUser: env.RATE_LIMIT_PASSWORD_PER_USER,
+    };
+
     this.observability = {
       sentryDsn: env.SENTRY_DSN,
       sentryTracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE,
@@ -116,6 +155,34 @@ function parseCorsOrigins(raw: string): readonly string[] | true {
 }
 
 /**
+ * Database settings alone, for tools that touch only PostgreSQL.
+ *
+ * The migration runner has no use for a JWT secret, and demanding one would mean an
+ * operator cannot apply migrations without holding a credential unrelated to the job.
+ * Derived from the same schema by projection, so the two cannot drift.
+ */
+export function loadDatabaseConfig(source: Record<string, unknown>): DatabaseConfig {
+  const schema = envSchema.pick({
+    DATABASE_URL: true,
+    DATABASE_POOL_MAX: true,
+    DATABASE_CONNECT_TIMEOUT_MS: true,
+    DATABASE_STATEMENT_TIMEOUT_MS: true,
+    DATABASE_SSL: true,
+  });
+
+  const result = schema.safeParse(source);
+  if (!result.success) throw new Error(formatConfigError(result.error));
+
+  return {
+    url: result.data.DATABASE_URL,
+    poolMax: result.data.DATABASE_POOL_MAX,
+    connectTimeoutMs: result.data.DATABASE_CONNECT_TIMEOUT_MS,
+    statementTimeoutMs: result.data.DATABASE_STATEMENT_TIMEOUT_MS,
+    ssl: result.data.DATABASE_SSL,
+  };
+}
+
+/**
  * Validates raw environment input and builds the typed configuration.
  * Throws with an aggregated, human-readable report so a bad deploy fails loudly.
  */
@@ -129,6 +196,12 @@ export function loadAppConfig(source: Record<string, unknown>): AppConfig {
   const config = new AppConfig(result.data);
   assertProductionInvariants(config);
   return config;
+}
+
+/** Matches a placeholder regardless of surrounding decoration. */
+function isInsecureSecret(value: string): boolean {
+  const normalised = value.trim().toLowerCase();
+  return INSECURE_SECRETS.some((placeholder) => normalised.includes(placeholder));
 }
 
 function formatConfigError(error: z.ZodError): string {
@@ -148,6 +221,17 @@ function assertProductionInvariants(config: AppConfig): void {
   }
   if (config.logging.pretty) {
     violations.push('LOG_PRETTY must be false in production (structured JSON logs are required)');
+  }
+
+  /* A deployment running on the example secrets is compromised before it starts (§55). */
+  if (isInsecureSecret(config.auth.accessTokenSecret)) {
+    violations.push('JWT_ACCESS_SECRET is a known placeholder value and must be replaced');
+  }
+  if (isInsecureSecret(config.auth.ipHashKey)) {
+    violations.push('IP_HASH_KEY is a known placeholder value and must be replaced');
+  }
+  if (config.auth.accessTokenSecret === config.auth.ipHashKey) {
+    violations.push('IP_HASH_KEY must not reuse JWT_ACCESS_SECRET');
   }
 
   if (violations.length > 0) {

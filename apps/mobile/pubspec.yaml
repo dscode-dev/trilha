@@ -23,6 +23,10 @@ dependencies:
   # Value equality for domain/state types without hand-written operator==.
   equatable: ^2.0.7
 
+  # Refresh tokens go to the iOS Keychain / Android Keystore-backed store — never
+  # SharedPreferences or a plain file (§37).
+  flutter_secure_storage: ^11.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

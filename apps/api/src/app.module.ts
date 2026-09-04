@@ -5,6 +5,7 @@ import { LoggingModule } from './common/logging/logging.module.js';
 import { DatabaseModule } from './infrastructure/database/database.module.js';
 import { CacheModule } from './infrastructure/cache/cache.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { IdentityModule } from './modules/identity/identity.module.js';
 import { RequestIdMiddleware } from './common/http/request-id.middleware.js';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter.js';
 import { NotFoundModule } from './common/http/not-found.module.js';
@@ -13,8 +14,8 @@ import { NotFoundModule } from './common/http/not-found.module.js';
  * Composition root of the modular monolith (ADR-0001).
  *
  * `infrastructure/*` provides technical capabilities; `modules/*` holds bounded
- * contexts. PR-00 ships exactly one module — `health` — because the constitution
- * forbids scaffolding domains ahead of the PRs that own them.
+ * contexts. Modules are added by the PR that owns them — the constitution forbids
+ * scaffolding a domain ahead of that.
  */
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NotFoundModule } from './common/http/not-found.module.js';
     DatabaseModule,
     CacheModule,
     HealthModule,
+    IdentityModule,
     /* Last: its wildcard route must not shadow a real one. */
     NotFoundModule,
   ],

@@ -96,6 +96,57 @@ second writable copy of a fact — two writable copies of one fact diverge.
 
 ---
 
+## Identity and session
+
+Established in PR-01. These are invariants, not implementation details: each exists
+because violating it converts a recoverable incident into an account takeover.
+
+**31. A refresh token is never persisted in a readable form.**
+Only a digest is stored, server-side and client-side alike. A database dump or a device
+backup must not yield usable tokens.
+
+**32. Refresh rotation is single-use.**
+Refreshing consumes the presented token and issues a successor. Concurrency is settled
+by the database, never by an application lock — a guarantee that survives a second
+instance is the only kind worth having.
+
+**33. Reuse of a rotated refresh token revokes the whole session.**
+A replayed token means theft or a lost race, and the two are indistinguishable. Both
+are treated as compromise. Signing out a legitimate user is the accepted cost; leaving
+a thief with a live session is not.
+
+**34. Access tokens are short-lived and carry no profile.**
+Minimum claims only — subject, session, issuer, audience, validity. A bearer token
+travels through logs and proxies, and embedded profile data goes stale the moment it
+changes.
+
+**35. Credential, identity and public profile are separate.**
+Reading a profile must never touch password material, and rotating a secret must never
+rewrite identity.
+
+**36. Case-insensitive identity is enforced by the database.**
+Email and username uniqueness rests on generated columns and unique indexes, not on
+remembering to normalise at every call site.
+
+**37. Authentication endpoints do not disclose whether an account exists.**
+Login returns one answer, in comparable time, for an unknown address and a wrong
+password. Registration is the sole documented exception, because a signup form cannot
+function otherwise.
+
+**38. On the client, a refresh token lives only in platform secure storage.**
+Keychain or Keystore-backed. Never `SharedPreferences`, a file, or a plain database.
+The access token stays in memory.
+
+**39. Client refresh is single-flight.**
+Concurrent callers share one rotation. Firing several is not merely wasteful — with
+single-use tokens it is indistinguishable from a replay attack against our own server.
+
+**40. Changing a password revokes every session, the caller's included.**
+Someone changing a password may be reacting to a compromise, and there is no way to
+tell which live session belongs to the attacker.
+
+---
+
 ## Engineering
 
 **20. UTC internally.**
@@ -142,6 +193,11 @@ presented as implementation. If it is not real, it does not ship.
 Validated configuration, secrets out of Git, least privilege, non-root containers,
 explicit CORS, and logs that never contain credentials or personal data. These are
 design inputs, not a hardening pass scheduled for later.
+
+**41. Personal data is minimised and never stored where a digest will do.**
+Collect only what a feature genuinely needs. Client addresses in audit records are
+keyed digests, not addresses; identifiers in cache keys are hashed. Nothing is
+retained because it might be useful later.
 
 ---
 

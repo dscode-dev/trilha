@@ -56,6 +56,368 @@
           "platform"
         ]
       }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "description": "Creates the account and signs it in through the same session pipeline as login. Unlike login, this endpoint does disclose whether an email or username is taken — a signup form cannot work otherwise (see ADR-0008).",
+        "operationId": "AuthController_registerAccount",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create an account",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Returns an identical error for an unknown address and a wrong password, and spends comparable time on both, so the endpoint cannot be used to discover which addresses are registered.",
+        "operationId": "AuthController_signIn",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sign in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Consumes the presented refresh token and issues a new pair. Rotation is single-use: presenting a token that was already rotated is treated as compromise and revokes the whole session.",
+        "operationId": "AuthController_rotate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthTokensDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rotate the session tokens",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Revokes this session and its refresh tokens. An access token already issued remains valid until it expires — at most the configured access TTL.",
+        "operationId": "AuthController_signOut",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "End the current session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "description": "Revokes all sessions for the account, including the one making the request.",
+        "operationId": "AuthController_signOutEverywhere",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutAllResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "End every session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "description": "Account identity plus the public profile. Never includes credentials.",
+        "operationId": "MeController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read the authenticated account",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/v1/me/profile": {
+      "patch": {
+        "description": "Only displayName, username and bio are writable in V1. avatarUrl is read-only because object storage does not exist yet.",
+        "operationId": "MeController_updateProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update the public profile",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/v1/me/change-password": {
+      "post": {
+        "description": "Requires the current password. On success **every session is revoked, including this one**, so the client must discard its tokens and sign in again.",
+        "operationId": "MeController_changeOwnPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePasswordResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change the account password",
+        "tags": [
+          "me"
+        ]
+      }
     }
   },
   "info": {
@@ -144,6 +506,95 @@
           "dependencies"
         ]
       },
+      "DeviceDto": {
+        "type": "object",
+        "properties": {
+          "deviceName": {
+            "type": "string",
+            "example": "Pixel 8",
+            "maxLength": 80
+          },
+          "platform": {
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ],
+            "type": "string"
+          },
+          "appVersion": {
+            "type": "string",
+            "example": "0.1.0",
+            "maxLength": 40
+          }
+        }
+      },
+      "RegisterRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ana@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "description": "At least 12 characters. Passphrases are encouraged.",
+            "example": "a quiet trail through pine"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "description": "Letters and numbers, optionally separated by a single - or _.",
+            "example": "ana-souza"
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 80,
+            "example": "Ana Souza"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceDto"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "username",
+          "displayName"
+        ]
+      },
+      "AuthTokensDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "Short-lived bearer token for the Authorization header."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Opaque, single-use token. Rotated on every refresh; the previous value is invalidated and replaying it revokes the session."
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 600,
+            "description": "Seconds until the access token expires."
+          },
+          "tokenType": {
+            "type": "string",
+            "example": "Bearer"
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "expiresIn",
+          "tokenType"
+        ]
+      },
       "ErrorBody": {
         "type": "object",
         "properties": {
@@ -159,6 +610,13 @@
               "PAYLOAD_TOO_LARGE",
               "UNSUPPORTED_MEDIA_TYPE",
               "TOO_MANY_REQUESTS",
+              "INVALID_CREDENTIALS",
+              "EMAIL_ALREADY_IN_USE",
+              "USERNAME_ALREADY_IN_USE",
+              "WEAK_PASSWORD",
+              "INVALID_TOKEN",
+              "SESSION_EXPIRED",
+              "ACCOUNT_DISABLED",
               "INTERNAL_ERROR",
               "SERVICE_UNAVAILABLE",
               "DEPENDENCY_UNAVAILABLE"
@@ -197,6 +655,169 @@
         },
         "required": [
           "error"
+        ]
+      },
+      "LoginRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ana@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "The account password.",
+            "example": "a quiet trail through pine"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceDto"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RefreshRequestDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "The opaque refresh token from the previous authentication response."
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "LogoutAllResponseDto": {
+        "type": "object",
+        "properties": {
+          "revokedCount": {
+            "type": "number",
+            "example": 3
+          }
+        },
+        "required": [
+          "revokedCount"
+        ]
+      },
+      "ProfileDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "ana-souza"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Ana Souza"
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Always null in V1 — avatar upload is not implemented yet.",
+            "example": null
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 280,
+            "example": null
+          }
+        },
+        "required": [
+          "username",
+          "displayName",
+          "avatarUrl",
+          "bio"
+        ]
+      },
+      "MeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "01a06cc8-9b3a-7ba0-879e-f01610559f9c"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ana@example.com"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "DISABLED",
+              "PENDING"
+            ],
+            "example": "ACTIVE"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileDto"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "status",
+          "profile"
+        ]
+      },
+      "UpdateProfileRequestDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "example": "ana-souza"
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 80,
+            "example": "Ana Souza"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 280,
+            "description": "Send null to clear it."
+          }
+        }
+      },
+      "ChangePasswordRequestDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "The password currently on the account."
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
+      "ChangePasswordResponseDto": {
+        "type": "object",
+        "properties": {
+          "revokedSessions": {
+            "type": "number",
+            "example": 2,
+            "description": "Sessions revoked by this change. Every session is revoked, including the caller’s, so the client must sign in again."
+          }
+        },
+        "required": [
+          "revokedSessions"
         ]
       }
     }

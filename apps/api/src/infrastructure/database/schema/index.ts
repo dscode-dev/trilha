@@ -1,9 +1,7 @@
 /**
  * Drizzle table definitions.
  *
- * Intentionally empty in PR-00: no product domain exists yet, and the constitution
- * forbids creating speculative entities (`User`, `Place`, `Trail`, …) ahead of the
- * PRs that own them. Tables are added here as their bounded contexts land, each
- * with a generated migration under `../migrations`.
+ * Tables are added as their bounded contexts land, each with a migration under
+ * `../migrations`. PR-01 introduces the identity domain; no other domain exists yet.
  */
-export {};
+export * from './identity.js';

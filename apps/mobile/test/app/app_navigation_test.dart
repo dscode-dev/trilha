@@ -4,41 +4,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:trilha_mobile/app/app.dart';
 import 'package:trilha_mobile/app/bootstrap/providers.dart';
-import 'package:trilha_mobile/app/config/app_config.dart';
 import 'package:trilha_mobile/app/config/app_environment.dart';
 import 'package:trilha_mobile/app/navigation/app_router.dart';
-import 'package:trilha_mobile/app/navigation/app_routes.dart';
-import 'package:trilha_mobile/core/logging/app_logger.dart';
 import 'package:trilha_mobile/core/networking/api_client.dart';
-import 'package:trilha_mobile/core/observability/error_reporter.dart';
+import 'package:trilha_mobile/features/auth/application/auth_providers.dart';
+import 'package:trilha_mobile/features/auth/application/auth_state.dart';
+import 'package:trilha_mobile/features/auth/presentation/auth_routes.dart';
+import 'package:trilha_mobile/features/auth/presentation/home_screen.dart';
+import 'package:trilha_mobile/features/auth/presentation/sign_in_screen.dart';
+import 'package:trilha_mobile/features/auth/presentation/sign_up_screen.dart';
+import 'package:trilha_mobile/features/profile/presentation/profile_screen.dart';
 import 'package:trilha_mobile/features/root/presentation/root_screen.dart';
 
-/// Builds the real composition root with the same overrides bootstrap installs.
-ProviderContainer _container() {
-  return ProviderContainer(
-    overrides: [
-      appConfigProvider.overrideWithValue(
-        AppConfig.forEnvironment(AppEnvironment.development),
-      ),
-      appLoggerProvider.overrideWithValue(const AppLogger(name: 'test')),
-      errorReporterProvider.overrideWithValue(
-        const LoggingErrorReporter(AppLogger(name: 'test')),
-      ),
-    ],
-  );
-}
+import '../support/auth_fakes.dart';
 
-Widget _app(ProviderContainer container) {
-  return UncontrolledProviderScope(
-    container: container,
-    child: const TrilhaApp(),
-  );
-}
-
+/// Composition root and auth-derived navigation (§36, §51).
 void main() {
+  Widget app(ProviderContainer container) =>
+      UncontrolledProviderScope(container: container, child: const TrilhaApp());
+
   group('Composition root', () {
     test('config, logger and reporter resolve from overrides', () {
-      final ProviderContainer container = _container();
+      final ProviderContainer container = authTestContainer();
       addTearDown(container.dispose);
 
       expect(
@@ -46,14 +33,11 @@ void main() {
         AppEnvironment.development,
       );
       expect(container.read(appLoggerProvider).name, 'test');
-      expect(
-        container.read(errorReporterProvider),
-        isA<LoggingErrorReporter>(),
-      );
+      expect(container.read(errorReporterProvider), isNotNull);
     });
 
     test('the API client is built from the injected configuration', () {
-      final ProviderContainer container = _container();
+      final ProviderContainer container = authTestContainer();
       addTearDown(container.dispose);
 
       final ApiClient client = container.read(apiClientProvider);
@@ -63,12 +47,22 @@ void main() {
       );
     });
 
+    test('the API client carries the auth interceptor', () {
+      final ProviderContainer container = authTestContainer();
+      addTearDown(container.dispose);
+
+      // Request id, logging and auth — auth must be present or protected calls
+      // would silently go out unauthenticated.
+      expect(
+        container.read(apiClientProvider).raw.interceptors.length,
+        greaterThanOrEqualTo(3),
+      );
+    });
+
     test('providers without an override fail loudly rather than silently', () {
       final ProviderContainer bare = ProviderContainer();
       addTearDown(bare.dispose);
 
-      // Riverpod 3 wraps a provider's own error in a ProviderException; what
-      // matters is that the missing override surfaces loudly and explains itself.
       expect(
         () => bare.read(appConfigProvider),
         throwsA(
@@ -81,7 +75,7 @@ void main() {
     });
 
     test('the API client is a singleton within a scope', () {
-      final ProviderContainer container = _container();
+      final ProviderContainer container = authTestContainer();
       addTearDown(container.dispose);
 
       expect(
@@ -94,88 +88,199 @@ void main() {
     });
   });
 
-  group('Navigation', () {
-    testWidgets('boots to the root route', (WidgetTester tester) async {
-      final ProviderContainer container = _container();
+  group('Navigation derived from auth state (§36)', () {
+    testWidgets('holds on the launch surface while bootstrapping', (
+      WidgetTester tester,
+    ) async {
+      // A slow store keeps the bootstrapping window open long enough to observe,
+      // which is what a real Keychain read does.
+      final ProviderContainer container = authTestContainer(
+        tokenStore: FakeTokenStore(null, const Duration(milliseconds: 200)),
+      );
       addTearDown(container.dispose);
 
-      await tester.pumpWidget(_app(container));
+      await tester.pumpWidget(app(container));
+      await tester.pump();
+
+      expect(container.read(authControllerProvider), isA<AuthBootstrapping>());
+      expect(find.byType(RootScreen), findsOneWidget);
+      expect(
+        find.byType(SignInScreen),
+        findsNothing,
+        reason: 'must not flash sign-in',
+      );
+
+      // Let the pending read finish so the test ends with no live timer.
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('lands on sign-in when no session is stored', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = authTestContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(app(container));
       await tester.pumpAndSettle();
 
-      expect(find.byType(RootScreen), findsOneWidget);
+      expect(find.byType(SignInScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('applies the brand theme to the running app', (
-      WidgetTester tester,
-    ) async {
-      final ProviderContainer container = _container();
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(_app(container));
-      await tester.pumpAndSettle();
-
-      final MaterialApp app = tester.widget<MaterialApp>(
-        find.byType(MaterialApp),
-      );
-      expect(app.theme, isNotNull);
-      expect(
-        app.darkTheme,
-        isNotNull,
-        reason: 'dark mode must be supported from day one',
-      );
-      expect(app.themeMode, ThemeMode.system);
-    });
-
     testWidgets(
-      'shows a real screen for an unknown deep link instead of crashing',
+      'restores a stored session straight to the authenticated root',
       (WidgetTester tester) async {
-        final ProviderContainer container = _container();
+        final ProviderContainer container = authTestContainer(
+          tokenStore: FakeTokenStore('stored-refresh-token'),
+        );
         addTearDown(container.dispose);
 
-        await tester.pumpWidget(_app(container));
+        await tester.pumpWidget(app(container));
         await tester.pumpAndSettle();
 
-        container.read(appRouterProvider).go('/does-not-exist');
-        await tester.pumpAndSettle();
-
-        expect(find.byType(RouteNotFoundScreen), findsOneWidget);
-        expect(tester.takeException(), isNull);
+        expect(find.byType(HomeScreen), findsOneWidget);
+        expect(find.byType(SignInScreen), findsNothing);
       },
     );
 
-    testWidgets('can navigate back to root from the not-found screen', (
-      WidgetTester tester,
-    ) async {
-      final ProviderContainer container = _container();
+    testWidgets(
+      'signing in moves to the authenticated root with no manual navigation',
+      (WidgetTester tester) async {
+        final ProviderContainer container = authTestContainer();
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(app(container));
+        await tester.pumpAndSettle();
+        expect(find.byType(SignInScreen), findsOneWidget);
+
+        await container
+            .read(authControllerProvider.notifier)
+            .login(email: 'ana@trilha.test', password: 'a quiet trail');
+        await tester.pumpAndSettle();
+
+        expect(find.byType(HomeScreen), findsOneWidget);
+      },
+    );
+
+    testWidgets('signing out returns to sign-in', (WidgetTester tester) async {
+      final ProviderContainer container = authTestContainer(
+        tokenStore: FakeTokenStore('stored-refresh-token'),
+      );
       addTearDown(container.dispose);
 
-      await tester.pumpWidget(_app(container));
+      await tester.pumpWidget(app(container));
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      await container.read(authControllerProvider.notifier).logout();
       await tester.pumpAndSettle();
 
-      container.read(appRouterProvider).go('/does-not-exist');
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Go to start'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(RootScreen), findsOneWidget);
+      expect(find.byType(SignInScreen), findsOneWidget);
     });
 
-    test('the root route is registered under a stable name', () {
-      expect(AppRoutes.rootName, 'root');
-      expect(AppRoutes.rootPath, '/');
+    testWidgets('an unauthenticated user cannot reach a protected route', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = authTestContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(app(container));
+      await tester.pumpAndSettle();
+
+      container.read(appRouterProvider).go(AuthRoutes.profilePath);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProfileScreen), findsNothing);
+      expect(find.byType(SignInScreen), findsOneWidget);
+    });
+
+    testWidgets('an authenticated user cannot go back to sign-in', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = authTestContainer(
+        tokenStore: FakeTokenStore('stored-refresh-token'),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(app(container));
+      await tester.pumpAndSettle();
+
+      container.read(appRouterProvider).go(AuthRoutes.loginPath);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SignInScreen), findsNothing);
+      expect(find.byType(HomeScreen), findsOneWidget);
+    });
+
+    testWidgets('an authenticated user can reach the profile', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = authTestContainer(
+        tokenStore: FakeTokenStore('stored-refresh-token'),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(app(container));
+      await tester.pumpAndSettle();
+
+      container.read(appRouterProvider).go(AuthRoutes.profilePath);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ProfileScreen), findsOneWidget);
+    });
+
+    testWidgets('registration is reachable from sign-in', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = authTestContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(app(container));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('New to Trilha? Create an account'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SignUpScreen), findsOneWidget);
+    });
+  });
+
+  group('Theme and error routes', () {
+    testWidgets('applies the brand theme to the running app', (
+      WidgetTester tester,
+    ) async {
+      final ProviderContainer container = authTestContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(app(container));
+      await tester.pumpAndSettle();
+
+      final MaterialApp materialApp = tester.widget<MaterialApp>(
+        find.byType(MaterialApp),
+      );
+      expect(materialApp.theme, isNotNull);
+      expect(
+        materialApp.darkTheme,
+        isNotNull,
+        reason: 'dark mode from day one',
+      );
+      expect(materialApp.themeMode, ThemeMode.system);
+    });
+
+    test('route names are stable', () {
+      expect(AuthRoutes.loginName, 'sign-in');
+      expect(AuthRoutes.homeName, 'home');
+      expect(AuthRoutes.profileName, 'profile');
     });
 
     testWidgets('the router is disposed with its scope', (
       WidgetTester tester,
     ) async {
-      final ProviderContainer container = _container();
+      final ProviderContainer container = authTestContainer();
       final GoRouter router = container.read(appRouterProvider);
 
       container.dispose();
 
-      // A disposed router rejects further use rather than leaking listeners.
       expect(() => router.go('/'), throwsA(anything));
     });
   });

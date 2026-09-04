@@ -87,7 +87,9 @@ jobs:
           DATABASE_URL: postgresql://trilha:trilha@localhost:5432/trilha
           REDIS_URL: redis://localhost:6379
 
-      # Exercises real PostgreSQL/PostGIS and Redis — no mocks (§24, §43).
+      # Exercises real PostgreSQL/PostGIS and Redis — no mocks (§24, §43, §50).
+      # Auth secrets are test-only values supplied by test/integration/setup-env.ts;
+      # nothing here is a deployment credential.
       - name: Integration tests
         run: npm run test:integration
         env:
@@ -105,6 +107,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://trilha:trilha@localhost:5432/trilha
           REDIS_URL: redis://localhost:6379
+          # Building the document needs valid configuration, not real secrets.
+          JWT_ACCESS_SECRET: ci-only-openapi-export-secret-000000000000
+          IP_HASH_KEY: ci-only-openapi-export-iphash-1111111111111
 
       # Dev-only advisories are reported but do not gate; the shipped surface must be clean.
       - name: Audit production dependencies

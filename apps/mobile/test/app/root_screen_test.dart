@@ -79,7 +79,9 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(_harness(textScale: 2.0));
-      await tester.pumpAndSettle();
+      // The progress indicator animates indefinitely, so settling would never
+      // return; a couple of frames is enough to surface a layout overflow.
+      await tester.pump(const Duration(milliseconds: 100));
 
       expect(tester.takeException(), isNull);
     });
@@ -88,7 +90,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(_harness(size: const Size(320, 568)));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
 
       expect(tester.takeException(), isNull);
     });
