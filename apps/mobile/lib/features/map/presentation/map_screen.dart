@@ -182,12 +182,53 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('Search for a place'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(_searchForEndpoint(slot));
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.place_outlined),
               title: const Text('Tap a place on the map'),
               subtitle: const Text('Close this and tap any marker'),
               onTap: () => Navigator.of(sheetContext).pop(),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Reuses the Places search rather than growing a second one (§34).
+  Future<void> _searchForEndpoint(_EndpointSlot slot) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => Padding(
+        /* Lifted above the keyboard, which covers the results otherwise. */
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: PlaceSearchBar(
+              onSelected: (PlaceListItem place) {
+                Navigator.of(sheetContext).pop();
+                _assignEndpoint(
+                  slot,
+                  RouteEndpoint(
+                    position: place.position,
+                    placeId: place.id,
+                    label: place.name,
+                  ),
+                );
+              },
+            ),
+          ),
         ),
       ),
     );

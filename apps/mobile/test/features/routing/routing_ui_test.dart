@@ -6,8 +6,12 @@ import 'package:trilha_mobile/core/errors/app_failure.dart';
 import 'package:trilha_mobile/features/routing/application/routing_controller.dart';
 import 'package:trilha_mobile/features/routing/application/routing_providers.dart';
 import 'package:trilha_mobile/features/routing/domain/route.dart';
+import 'package:trilha_mobile/features/places/domain/place.dart';
+import 'package:trilha_mobile/features/places/presentation/place_search_bar.dart';
+import 'package:trilha_mobile/features/routing/application/routing_state.dart';
 import 'package:trilha_mobile/features/routing/presentation/route_panel.dart';
 
+import '../../support/places_fakes.dart';
 import '../../support/routing_fakes.dart';
 
 /// The route-building surface (§66).
@@ -240,6 +244,51 @@ void main() {
       expect(find.text('Choose a starting point'), findsOneWidget);
       expect(find.text('Olinda'), findsNothing);
       expect(find.text('Clear'), findsNothing);
+    });
+  });
+
+  group('endpoint selection reuses Places search (§34)', () {
+    testWidgets('a searched Place becomes an endpoint with its id and name', (
+      WidgetTester tester,
+    ) async {
+      final FakePlacesApi places = FakePlacesApi()
+        ..searchResults = <PlaceListItem>[
+          listItem('sao-id', name: 'São Paulo'),
+        ];
+      final ProviderContainer container = routingTestContainer(places: places);
+      addTearDown(container.dispose);
+
+      late PlaceListItem chosen;
+      await tester.pumpWidget(
+        host(
+          container,
+          panel: PlaceSearchBar(onSelected: (PlaceListItem p) => chosen = p),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField), 'sao paulo');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('São Paulo'));
+      await tester.pump();
+
+      container
+          .read(routingControllerProvider.notifier)
+          .setDestination(
+            RouteEndpoint(
+              position: chosen.position,
+              placeId: chosen.id,
+              label: chosen.name,
+            ),
+          );
+
+      final RoutingState state = container.read(routingControllerProvider);
+      expect(state.destination?.placeId, 'sao-id');
+      expect(
+        state.destination?.label,
+        'São Paulo',
+        reason: 'a named Place must not degrade to a coordinate pair',
+      );
     });
   });
 
