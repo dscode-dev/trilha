@@ -59,6 +59,27 @@ export interface RateLimitConfig {
   readonly passwordPerUser: number;
   readonly routingPerUser: number;
   readonly routingPerIp: number;
+  /** Discovery is metered separately, on a longer window (§42). */
+  readonly discoveryWindowSeconds: number;
+  readonly discoveryPerUser: number;
+  readonly discoveryPerIp: number;
+}
+
+/**
+ * Operational ceilings for discovery (§84).
+ *
+ * Only the *bounds* live here. The relevance weights deliberately do not: a score is
+ * a versioned product decision that must be reproducible from a policy name, and
+ * weights read from the environment would make two deployments rank the same route
+ * differently with nothing in the response to explain it (§37).
+ */
+export interface DiscoveryConfig {
+  readonly maxSpatialCandidates: number;
+  readonly maxDetourCandidates: number;
+  readonly providerConcurrency: number;
+  readonly defaultMaxDetourMinutes: number;
+  readonly maxDetourMinutes: number;
+  readonly maxResults: number;
 }
 
 export interface RoutingConfig {
@@ -87,6 +108,7 @@ export class AppConfig {
   readonly auth: AuthConfig;
   readonly rateLimit: RateLimitConfig;
   readonly routing: RoutingConfig;
+  readonly discovery: DiscoveryConfig;
   readonly observability: ObservabilityConfig;
 
   constructor(env: Env) {
@@ -134,6 +156,15 @@ export class AppConfig {
       corridorMaxMeters: env.ROUTING_CORRIDOR_MAX_METERS,
     };
 
+    this.discovery = {
+      maxSpatialCandidates: env.DISCOVERY_MAX_SPATIAL_CANDIDATES,
+      maxDetourCandidates: env.DISCOVERY_MAX_DETOUR_CANDIDATES,
+      providerConcurrency: env.DISCOVERY_PROVIDER_CONCURRENCY,
+      defaultMaxDetourMinutes: env.DISCOVERY_DEFAULT_MAX_DETOUR_MINUTES,
+      maxDetourMinutes: env.DISCOVERY_MAX_DETOUR_MINUTES,
+      maxResults: env.DISCOVERY_MAX_RESULTS,
+    };
+
     this.rateLimit = {
       windowSeconds: env.RATE_LIMIT_WINDOW_SECONDS,
       loginPerIp: env.RATE_LIMIT_LOGIN_PER_IP,
@@ -143,6 +174,9 @@ export class AppConfig {
       passwordPerUser: env.RATE_LIMIT_PASSWORD_PER_USER,
       routingPerUser: env.RATE_LIMIT_ROUTING_PER_USER,
       routingPerIp: env.RATE_LIMIT_ROUTING_PER_IP,
+      discoveryWindowSeconds: env.RATE_LIMIT_DISCOVERY_WINDOW_SECONDS,
+      discoveryPerUser: env.RATE_LIMIT_DISCOVERY_PER_USER,
+      discoveryPerIp: env.RATE_LIMIT_DISCOVERY_PER_IP,
     };
 
     this.observability = {
@@ -243,6 +277,21 @@ function assertStructuralInvariants(config: AppConfig): void {
 
   if (config.routing.corridorDefaultMeters > config.routing.corridorMaxMeters) {
     violations.push('ROUTING_CORRIDOR_DEFAULT_METERS must not exceed ROUTING_CORRIDOR_MAX_METERS');
+  }
+
+  if (config.discovery.defaultMaxDetourMinutes > config.discovery.maxDetourMinutes) {
+    violations.push(
+      'DISCOVERY_DEFAULT_MAX_DETOUR_MINUTES must not exceed DISCOVERY_MAX_DETOUR_MINUTES',
+    );
+  }
+
+  /* Evaluating more candidates than the spatial query can return is not an error the
+     system would ever notice at runtime — it just means one of the two ceilings is
+     a lie about what the pipeline does. */
+  if (config.discovery.maxDetourCandidates > config.discovery.maxSpatialCandidates) {
+    violations.push(
+      'DISCOVERY_MAX_DETOUR_CANDIDATES must not exceed DISCOVERY_MAX_SPATIAL_CANDIDATES',
+    );
   }
 
   if (violations.length > 0) {

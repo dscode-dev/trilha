@@ -26,7 +26,10 @@ import { RoutingRateLimitGuard } from './presentation/guards/routing-rate-limit.
     CalculateRouteUseCase,
     RoutingRateLimitGuard,
   ],
-  /* Exported for PR-04, which needs a corridor to search Places along a route. */
-  exports: [CorridorRepository],
+  /* Discovery (PR-04) computes the route it searches along rather than accepting one
+     from a client, so it needs the use case. `CorridorRepository` stays exported for
+     any consumer that needs the corridor as a polygon — discovery does not, since
+     `ST_DWithin` against the line is both cheaper and equivalent (ADR-0014). */
+  exports: [CorridorRepository, CalculateRouteUseCase],
 })
 export class RoutingModule {}

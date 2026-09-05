@@ -240,6 +240,57 @@ the same disclosure with extra steps, and are equally forbidden.
 
 ---
 
+## Discovery
+
+Established in PR-04.
+
+**59. Relevance is a property of a pairing, not of a Place.**
+"How well does this place fit this route?" is the only relevance question Trilha can
+answer. A `places.relevance_score` column would have to mean "relevant in general",
+which is not a claim the platform can make or defend. Relevance is
+`score(place, route, policy)` and is computed, never stored.
+
+**60. The cheap stage always precedes the billed one.**
+Spatial filtering, status and category checks and endpoint coincidence all happen in
+PostGIS before a single provider call. Evaluating detours first would turn a fixed
+cost into one that scales with how many Places happen to sit near a route — worst
+exactly where the product is most useful.
+
+**61. Provider cost per request is bounded and stated.**
+Every discovery has an upper bound on upstream calls that does not depend on how many
+Places exist. If that number cannot be stated, the pipeline is not finished.
+
+**62. A search area is never supplied by the caller.**
+Trilha computes the route it searches along. A client-supplied geometry is an
+attacker-chosen search area over a metered pipeline, and no amount of validation makes
+it equivalent to one the platform derived itself.
+
+**63. Ranking is deterministic, explainable and versioned.**
+The same inputs produce the same order, every tie is broken by a stable rule, every
+candidate carries reason codes, and every response names the policy that produced it.
+Scores from different policy versions are not comparable and the contract says so.
+
+**64. A ranking may only use signals that exist.**
+No invented popularity, no proxy for quality, no bonus for provenance or for how much
+description someone typed. When a domain that owns a signal does not exist yet, the
+signal does not exist yet.
+
+**65. A score is not shown to a user.**
+"+7 min" is a fact someone can act on. `0.91423` is an implementation detail that reads
+as a quality rating and invites comparisons that are not valid.
+
+**66. Travel intent is not persisted.**
+Origin, destination, geometry, corridor, candidates and what the user picked are all
+discarded when the request ends. Recording them would build a record of where people
+intend to go, which clause 57 already refuses for routes and clause 50 for positions.
+
+**67. An empty result is an answer.**
+"Nothing along this route within the detour you accept" is a successful response and
+must not be dressed as a failure. Equally, an upstream outage must not be dressed as
+an empty result.
+
+---
+
 ## Engineering
 
 **20. UTC internally.**

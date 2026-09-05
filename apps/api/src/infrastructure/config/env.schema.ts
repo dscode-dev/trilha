@@ -110,6 +110,28 @@ export const envSchema = z.object({
   RATE_LIMIT_ROUTING_PER_USER: z.coerce.number().int().min(1).default(60),
   RATE_LIMIT_ROUTING_PER_IP: z.coerce.number().int().min(1).default(120),
 
+  /* ---- Discovery (PR-04) --------------------------------------------------
+     Discovery multiplies provider cost: one route calculation plus a travel-cost
+     matrix over the surviving candidates. Every ceiling below exists to make the
+     worst case per request a number someone can state (§83). */
+
+  /** Places the spatial query may return before any provider call is made. */
+  DISCOVERY_MAX_SPATIAL_CANDIDATES: z.coerce.number().int().min(1).max(1_000).default(100),
+  /** Of those, how many are worth paying to evaluate a detour for. */
+  DISCOVERY_MAX_DETOUR_CANDIDATES: z.coerce.number().int().min(1).max(200).default(20),
+  /** Parallel provider calls per discovery request. */
+  DISCOVERY_PROVIDER_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
+  DISCOVERY_DEFAULT_MAX_DETOUR_MINUTES: z.coerce.number().int().min(1).max(600).default(30),
+  DISCOVERY_MAX_DETOUR_MINUTES: z.coerce.number().int().min(1).max(600).default(120),
+  /** Candidates returned to the client, regardless of how many were evaluated. */
+  DISCOVERY_MAX_RESULTS: z.coerce.number().int().min(1).max(100).default(20),
+
+  /* An hour rather than the shared short window: discovery is an occasional,
+     expensive action, and a per-minute ceiling would be either useless or hostile. */
+  RATE_LIMIT_DISCOVERY_WINDOW_SECONDS: z.coerce.number().int().min(60).default(3_600),
+  RATE_LIMIT_DISCOVERY_PER_USER: z.coerce.number().int().min(1).default(20),
+  RATE_LIMIT_DISCOVERY_PER_IP: z.coerce.number().int().min(1).default(60),
+
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   /** Human-readable log output. Intended for local development only. */
   LOG_PRETTY: booleanFromEnv(false),

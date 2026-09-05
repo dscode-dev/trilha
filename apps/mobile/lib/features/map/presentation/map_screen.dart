@@ -15,6 +15,11 @@ import '../../places/presentation/place_detail_sheet.dart';
 import '../../places/presentation/place_search_bar.dart';
 import '../application/location_service.dart';
 import '../application/map_state.dart';
+import '../../discovery/application/discovery_providers.dart';
+import '../../discovery/application/discovery_state.dart';
+import '../../discovery/domain/route_candidate.dart';
+import '../../discovery/presentation/candidate_overlay.dart';
+import '../../discovery/presentation/discovery_sheet.dart';
 import '../../routing/application/routing_controller.dart';
 import '../../routing/application/routing_providers.dart';
 import '../../routing/application/routing_state.dart';
@@ -40,6 +45,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   mapbox.PointAnnotationManager? _markers;
   MapCamera? _camera;
   RouteOverlay? _routeOverlay;
+  CandidateOverlay? _candidateOverlay;
 
   /// Which endpoint the next selection fills. Null when not building a route.
   _EndpointSlot? _awaitingSelection;
@@ -72,6 +78,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         .createPolylineAnnotationManager();
     final mapbox.PointAnnotationManager endpointMarkers = await map.annotations
         .createPointAnnotationManager();
+    /* Candidates get their own manager, so clearing them never touches a Place the
+       user contributed or an endpoint the route drew (§56). */
+    _candidateOverlay = MapboxCandidateOverlay(
+      markers: await map.annotations.createPointAnnotationManager(),
+      markerColor: AppColors.brandGreen.toARGB32(),
+    );
+
     _routeOverlay = MapboxRouteOverlay(
       polylines: polylines,
       /* A separate manager from the Place markers, so clearing a route cannot
@@ -360,6 +373,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final MapState state = ref.watch(mapControllerProvider);
     final RoutingState routing = ref.watch(routingControllerProvider);
+    final DiscoveryState discovery = ref.watch(discoveryControllerProvider);
     /* Route mode starts at the moment the user asks for it, before an endpoint
        exists, so the panel is there to receive the first selection. */
     final bool routeMode = routing.isActive || _awaitingSelection != null;
@@ -379,6 +393,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ) {
       if (previous?.routeOrNull == next.routeOrNull) return;
       unawaited(_syncRoute(next.routeOrNull));
+    });
+
+    /* The same discipline for candidates: markers follow the discovery state, so a
+       cleared route cannot leave suggestions on screen for a journey nobody is
+       taking (§57, §62). */
+    ref.listen<DiscoveryState>(discoveryControllerProvider, (
+      DiscoveryState? previous,
+      DiscoveryState next,
+    ) {
+      if (previous?.candidates != next.candidates) {
+        unawaited(_candidateOverlay?.showCandidates(next.candidates));
+      }
+      if (previous?.selectedPlaceId != next.selectedPlaceId) {
+        unawaited(_candidateOverlay?.highlight(next.selectedPlaceId));
+      }
     });
 
     return Scaffold(
@@ -422,6 +451,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
 
+          /* Anchored to the bottom rather than pushed into a modal: the detour only
+             means something next to the route it is measured against (§55). */
+          if (discovery.isActive)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: DiscoverySheet(onCandidateTap: _focusOnCandidate),
+              ),
+            ),
+
           if (state.isLoadingPlaces)
             const Positioned(
               top: 0,
@@ -457,12 +501,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         : Icons.location_searching,
                   ),
                 ),
+                /* Discovery is offered only once a route exists, and only on a tap:
+                   each run costs a route calculation and a travel-cost matrix
+                   upstream, so it must never fire on an incidental rebuild (§62,
+                   §65). */
+                if (routing.routeOrNull != null &&
+                    !discovery.isActive) ...<Widget>[
+                  FloatingActionButton.extended(
+                    heroTag: 'discover-along-route',
+                    icon: const Icon(Icons.explore_outlined),
+                    label: const Text('Descobertas'),
+                    onPressed: () => unawaited(
+                      ref.read(discoveryControllerProvider.notifier).discover(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+
                 const SizedBox(height: AppSpacing.sm),
                 FloatingActionButton.small(
                   heroTag: 'plan-route',
                   tooltip: routeMode ? 'Close route planning' : 'Plan a route',
                   onPressed: () {
                     if (routeMode) {
+                      /* Resetting the route clears discovery too, because the
+                         controller watches routing — the candidates described a
+                         journey that no longer exists (§62). */
                       ref.read(routingControllerProvider.notifier).reset();
                       setState(() => _awaitingSelection = null);
                     } else {
@@ -484,6 +548,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ],
       ),
     );
+  }
+
+  /// Centres a tapped candidate without losing the route from view (§57).
+  Future<void> _focusOnCandidate(RouteCandidate candidate) async {
+    /* A gentle move rather than a zoom-to-fit: the user is comparing this place
+       against the line, and snapping the camera to it would hide the comparison. */
+    await _camera?.moveTo(candidate.place.position);
   }
 
   /// Draws or clears the route, and frames it when one appears (§37).

@@ -98,6 +98,12 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 | `MAPBOX_ROUTING_ACCESS_TOKEN` | Server-side token for the Directions API. **Not** the mobile map token — see "Routing" below. |
 | `ROUTING_PROVIDER_TIMEOUT_MS` | Upstream call ceiling (default 8000). An unbounded provider call holds a request, a connection and a socket. |
 | `ROUTING_CORRIDOR_DEFAULT_METERS` / `ROUTING_CORRIDOR_MAX_METERS` | Corridor half-width and its ceiling (defaults 5000 / 20000). Startup fails, in any environment, if the default exceeds the maximum. |
+| `DISCOVERY_MAX_SPATIAL_CANDIDATES` | Places the spatial query may return before any provider call (default 100). |
+| `DISCOVERY_MAX_DETOUR_CANDIDATES` | Of those, how many are worth paying to measure a detour for (default 20). Must not exceed the spatial cap. |
+| `DISCOVERY_PROVIDER_CONCURRENCY` | Parallel provider calls per discovery request (default 4). |
+| `DISCOVERY_DEFAULT_MAX_DETOUR_MINUTES` / `DISCOVERY_MAX_DETOUR_MINUTES` | Detour ceiling and its maximum (defaults 30 / 120). Startup fails if the default exceeds the maximum. |
+| `DISCOVERY_MAX_RESULTS` | Candidates returned regardless of how many were evaluated (default 20). |
+| `RATE_LIMIT_DISCOVERY_*` | Hourly ceilings for discovery — stricter than routing, because each call costs strictly more. |
 
 ## Running the backend
 
@@ -246,6 +252,98 @@ centre of the map, or any Place marker — and request the route. Distance and d
 appear as `121 km · 1h48`; the camera frames the whole line. Swapping the endpoints
 does not recalculate on its own, and clearing the route leaves the Places on the map
 untouched.
+
+## Discovery
+
+```
+Flutter (origin + destination)  ──▶  POST /discovery/routes   (session required)
+                                          │
+                        Routing Core  ──▶  route geometry           1 provider call
+                                          │
+                        PostGIS: ST_DWithin(location, line::geography, width)
+                                          │            GIST index, capped at 100
+                        RouteCostProvider (port)  ──▶  travel-cost matrix
+                                          │            1 provider call, ≤20 candidates
+                        RouteRelevancePolicyV1  ──▶  ranked RouteCandidate[]
+```
+
+Answers the question the platform exists for: **given a route, which Places are worth
+stopping at on the way?**
+
+- **Proximity is a filter; detour is the signal.** A Place 2 km off the line across a
+  river is 25 minutes of driving; one 4 km off on the same highway is 7. Straight-line
+  distance cannot tell them apart, so Trilha asks what a diversion actually costs.
+- **Everything free happens before anything billed** (ADR-0014). Spatial filtering,
+  status, category and endpoint checks all run in PostGIS; only what survives reaches a
+  metered provider. The order is the design.
+- **The backend computes the route it searches along.** Clients send two coordinate
+  pairs, never a geometry: an attacker-supplied LineString is an attacker-chosen search
+  area over a metered pipeline.
+- **`RouteCandidate` is never persisted**, and PR-04 adds no migration. Relevance is a
+  property of a *pairing* — `score(place, route, policy)` — so `places.relevance_score`
+  would have to mean "relevant in general", which is not a claim Trilha can make.
+- **Nothing about the journey is recorded.** No origin, no destination, no geometry, no
+  candidates, no selection. Logs carry counts, timings and the policy version only.
+
+### Worst-case provider cost per request
+
+| Stage | Calls |
+| --- | --- |
+| Route calculation (Directions) | 1 |
+| Detour evaluation (Matrix: 20 candidates ÷ 23 per call) | 1 |
+| **Total** | **2** |
+
+Bounded by four independent ceilings — spatial candidates, detour candidates, provider
+concurrency and an hourly rate limit — none of which depends on how many Places exist.
+The Matrix API carries 25 coordinates per driving request, so origin, destination and
+23 via-points fit in one call.
+
+### The ranking, in full
+
+```
+score = 0.60 · detourEfficiency + 0.25 · proximity + 0.15 · placement
+
+detourEfficiency = 1 − clamp(detourSeconds     / maxDetourSeconds, 0, 1)
+proximity        = 1 − clamp(distanceFromRoute / corridorWidth,    0, 1)
+placement        =     clamp(min(p, 1 − p)     / 0.15,             0, 1)
+```
+
+Deterministic, bounded to `[0, 1]`, sorted `score DESC, detour ASC, placeId ASC`. No
+model, no learned weights, no embeddings. Weights live in code and the response names
+the policy (`"v1"`), because two deployments must not rank the same route differently
+with nothing to explain it.
+
+Provenance, category and description length contribute **nothing** — origin is not
+quality, and text length is not either. Ratings, reviews and safety do not exist in the
+product yet and are not approximated (ADR-0015).
+
+### Explainability
+
+Candidates carry reason codes — `ON_ROUTE`, `VERY_CLOSE_TO_ROUTE`, `LOW_DETOUR`,
+`MODERATE_DETOUR`, `GOOD_ROUTE_POSITION`, `EARLY_IN_ROUTE`, `LATE_IN_ROUTE` — and the
+client owns the wording. The **score itself is never shown**: "+7 min" is actionable,
+`0.91423` reads as a quality rating and is not one.
+
+### Why discovery requires a session, and a stricter limit than routing
+
+Each call spends a route calculation *and* a matrix request. Reusing the routing
+ceiling would let a client convert its routing budget into twice the upstream spend.
+The window is an hour rather than the shared short one: planning a trip is an
+occasional deliberate act, so a per-minute ceiling would either bound nothing or punish
+someone adjusting a filter.
+
+### Baseline
+
+At **40,000 Places**: spatial retrieval **45 ms**, 100 candidates, ranking **2 ms**,
+one provider call for detour. `npm run test:integration -- discovery-benchmark`
+reproduces it.
+
+### Using it in the app
+
+Calculate a route, then tap **Descobertas**. The sheet lists what is worth stopping at
+with the extra time each adds; category chips re-run the search against the same route.
+Tapping a card highlights its marker on the map, and clearing the route clears the
+suggestions with it.
 
 ## Authentication
 
@@ -430,6 +528,21 @@ Both are rejected before spending an upstream call.
 geometry rather than to `::geography`, so the width was read as degrees. See
 ADR-0013; an integration test guards against this.
 
+**Discovery returns 200 with no candidates.** Usually working as intended: nothing
+active sits inside the corridor within the detour ceiling. Widen
+`corridorWidthMeters`, raise `maxDetourMinutes`, or clear the category filter. An
+outage returns 502, never an empty list.
+
+**Discovery is slow, or upstream cost is higher than expected.** The response
+`diagnostics` block shows how the funnel narrowed —`spatialCandidates`,
+`evaluatedCandidates`, `returnedCandidates` — and the log line adds `spatialQueryMs`,
+`detourEvaluationMs` and `rankingMs`. If `spatialCandidates` is at the cap, the
+corridor is wider than it needs to be.
+
+**Startup fails with `DISCOVERY_MAX_DETOUR_CANDIDATES must not exceed …`.** Working as
+intended: evaluating more candidates than the spatial query can return means one of
+the two ceilings is a lie about what the pipeline does.
+
 ## Documentation
 
 | Document | Contents |
@@ -441,6 +554,8 @@ ADR-0013; an integration test guards against this.
 | `apps/mobile/lib/features/README.md` | Feature-slice conventions |
 | `docs/adr/ADR-0012-…` | Why routing sits behind a port |
 | `docs/adr/ADR-0013-…` | Route geometry on the wire, and the corridor in metres |
+| `docs/adr/ADR-0014-…` | The discovery pipeline, and where money may be spent |
+| `docs/adr/ADR-0015-…` | Route relevance policy v1, weights and all |
 
 ## Contributing
 
