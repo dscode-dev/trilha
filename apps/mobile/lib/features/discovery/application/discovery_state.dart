@@ -25,13 +25,17 @@ final class DiscoveryIdle extends DiscoveryState {
 }
 
 final class DiscoveryLoading extends DiscoveryState {
-  const DiscoveryLoading({this.categories = const <String>[]});
+  const DiscoveryLoading({
+    this.categories = const <String>[],
+    this.maxDetourMinutes,
+  });
 
   /// Kept so the filter chips stay selected while a request is in flight.
   final List<String> categories;
+  final int? maxDetourMinutes;
 
   @override
-  List<Object?> get props => <Object?>[categories];
+  List<Object?> get props => <Object?>[categories, maxDetourMinutes];
 }
 
 final class DiscoverySuccess extends DiscoveryState {
@@ -40,11 +44,13 @@ final class DiscoverySuccess extends DiscoveryState {
     required this.policyVersion,
     this.categories = const <String>[],
     this.selectedPlaceId,
+    this.maxDetourMinutes,
   });
 
   final List<RouteCandidate> candidates;
   final String policyVersion;
   final List<String> categories;
+  final int? maxDetourMinutes;
 
   /// Which candidate the map and the list are both highlighting (§57).
   final String? selectedPlaceId;
@@ -54,6 +60,7 @@ final class DiscoverySuccess extends DiscoveryState {
     policyVersion: policyVersion,
     categories: categories,
     selectedPlaceId: placeId,
+    maxDetourMinutes: maxDetourMinutes,
   );
 
   @override
@@ -62,30 +69,37 @@ final class DiscoverySuccess extends DiscoveryState {
     policyVersion,
     categories,
     selectedPlaceId,
+    maxDetourMinutes,
   ];
 }
 
 /// A successful request that found nothing (§52).
 final class DiscoveryEmpty extends DiscoveryState {
-  const DiscoveryEmpty({this.categories = const <String>[]});
+  const DiscoveryEmpty({
+    this.categories = const <String>[],
+    this.maxDetourMinutes,
+  });
 
   final List<String> categories;
+  final int? maxDetourMinutes;
 
   @override
-  List<Object?> get props => <Object?>[categories];
+  List<Object?> get props => <Object?>[categories, maxDetourMinutes];
 }
 
 final class DiscoveryFailure extends DiscoveryState {
   const DiscoveryFailure({
     required this.failure,
     this.categories = const <String>[],
+    this.maxDetourMinutes,
   });
 
   final AppFailure failure;
   final List<String> categories;
+  final int? maxDetourMinutes;
 
   @override
-  List<Object?> get props => <Object?>[failure, categories];
+  List<Object?> get props => <Object?>[failure, categories, maxDetourMinutes];
 }
 
 extension DiscoveryStateX on DiscoveryState {
@@ -114,6 +128,18 @@ extension DiscoveryStateX on DiscoveryState {
     DiscoveryEmpty(:final List<String> categories) => categories,
     DiscoveryFailure(:final List<String> categories) => categories,
     DiscoveryIdle() => const <String>[],
+  };
+
+  /// The detour ceiling in force, or null while the server default applies (§37).
+  ///
+  /// A filter on *suggestions*, never a rule about the trail: a user may still add a
+  /// place by hand that costs more than this.
+  int? get maxDetourMinutes => switch (this) {
+    DiscoveryLoading(:final int? maxDetourMinutes) => maxDetourMinutes,
+    DiscoverySuccess(:final int? maxDetourMinutes) => maxDetourMinutes,
+    DiscoveryEmpty(:final int? maxDetourMinutes) => maxDetourMinutes,
+    DiscoveryFailure(:final int? maxDetourMinutes) => maxDetourMinutes,
+    DiscoveryIdle() => null,
   };
 
   /// True once discovery has anything to show or say — the sheet's visibility.

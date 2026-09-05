@@ -39,6 +39,16 @@ export const ErrorCode = {
   /** Trilha's own quota with an upstream provider is exhausted. */
   PROVIDER_RATE_LIMITED: 'PROVIDER_RATE_LIMITED',
 
+  /* --- Trails (PR-05) --- */
+  /** The trail changed between the client reading it and writing to it (§25). */
+  TRAIL_REVISION_CONFLICT: 'TRAIL_REVISION_CONFLICT',
+  TRAIL_STOP_LIMIT_REACHED: 'TRAIL_STOP_LIMIT_REACHED',
+  TRAIL_STOP_DUPLICATE: 'TRAIL_STOP_DUPLICATE',
+  INVALID_TRAIL_STOP_ORDER: 'INVALID_TRAIL_STOP_ORDER',
+  /** The stored route no longer describes the current composition (§22). */
+  TRAIL_ROUTE_STALE: 'TRAIL_ROUTE_STALE',
+  TRAIL_STOP_PLACE_UNAVAILABLE: 'TRAIL_STOP_PLACE_UNAVAILABLE',
+
   INTERNAL_ERROR: 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   DEPENDENCY_UNAVAILABLE: 'DEPENDENCY_UNAVAILABLE',

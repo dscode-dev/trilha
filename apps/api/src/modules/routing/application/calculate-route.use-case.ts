@@ -13,6 +13,8 @@ import { CorridorRepository } from '../infrastructure/corridor.repository.js';
 export interface CalculateRouteInput {
   origin: RoutePoint;
   destination: RoutePoint;
+  /** Intermediate points, visited in the order given (PR-05). */
+  waypoints?: readonly RoutePoint[] | undefined;
   /** Half-width of the corridor. Clamped to the configured maximum. */
   corridorWidthMeters?: number | undefined;
   /** Whether to derive and return the corridor at all. */
@@ -50,6 +52,7 @@ export class CalculateRouteUseCase {
     const result = await this.provider.calculateRoute({
       origin: input.origin,
       destination: input.destination,
+      waypoints: input.waypoints,
       profile: RoutingProfile.DRIVING,
     });
 
@@ -75,6 +78,7 @@ export class CalculateRouteUseCase {
         providerLatencyMs: result.provider.latencyMs,
         internalMs: totalMs - result.provider.latencyMs,
         distanceBucketKm: distanceBucketKm(result.metrics.distanceMeters),
+        waypointCount: input.waypoints?.length ?? 0,
         geometryPoints: result.geometry.coordinates.length,
         corridorIncluded: corridor !== null,
       },
@@ -89,6 +93,7 @@ export class CalculateRouteUseCase {
       bounds,
       legs: result.legs,
       corridor,
+      provider: result.provider.name,
     };
   }
 

@@ -291,6 +291,64 @@ an empty result.
 
 ---
 
+## Trails
+
+Established in PR-05.
+
+**68. A Trail is not a Route.**
+A Route is what the road network says about getting from A to B — derived, disposable,
+owned by nobody. A Trail is a decision a person made: which places, in which order,
+deliberately saved. Routing answers *how*; a Trail records *what was chosen*.
+
+**69. A TrailStop always references a resolved Place.**
+Never a bare coordinate and never free text. An unresolved stop cannot be shown,
+searched, deduplicated or reused across trails, and admitting one would force every
+consumer to handle a case the domain says does not exist.
+
+**70. A Trail's routing snapshot is provider-independent, and it is a snapshot.**
+Metres, seconds, GeoJSON and a bare provider name — never an upstream payload. It is
+stored so that opening a trail tomorrow shows the same line and the same numbers as
+today: a road closing overnight must not silently rewrite a journey someone saved.
+
+**71. The snapshot revision must match the composition revision.**
+A stored route states which version of the composition it describes. A trail whose
+route describes an older version is stale and says so, and one cannot be finished
+while it is: "I'm done" has to mean the thing the user was looking at is the thing
+that got saved.
+
+**72. Every Trail mutation uses optimistic concurrency.**
+Clients send the revision they are editing, and the check is a predicate on the write
+itself. Two edits at the same revision produce one success and one conflict, never two
+successes. A conflict is resolved by reloading, never by merging or overwriting — a
+lost update is worse than a retry because nobody finds out about it.
+
+**73. No external call happens inside a database transaction.**
+The composition is decided in memory, the provider is asked outside any transaction,
+and the result is committed in one short write. A transaction held open across an HTTP
+call turns a slow upstream into an exhausted connection pool.
+
+**74. A failed recalculation applies nothing.**
+The composition change and the route that describes it are written together or not at
+all. A trail carrying a stop it has no route through would draw a line that omits
+somewhere the user chose to go.
+
+**75. Stop order is explicit and contiguous.**
+A `position`, never insertion time: a reorder changes the order without creating
+anything, so `createdAt` stops describing the sequence the moment a row is dragged.
+
+**76. Persisting travel intent requires an explicit act.**
+Calculating a route and browsing suggestions leave nothing behind. Saving a Trail is
+the user choosing to keep an origin, a destination and a set of stops — which is a
+different thing from tracking, and the difference is that they asked. Current location
+becomes part of a Trail only because they saved one.
+
+**77. Publication does not belong to the Trail Builder.**
+Finishing a Trail means the user stopped composing, not that anyone else can see it.
+No visibility flag, no slug, no share or comment count exists until the domain that
+governs them does.
+
+---
+
 ## Engineering
 
 **20. UTC internally.**

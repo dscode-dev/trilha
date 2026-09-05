@@ -25,9 +25,15 @@ abstract final class AuthFormMessages {
     /* A cancelled request is the app superseding its own work; there is nothing to
        tell the user, but the switch must stay exhaustive. */
     FailureKind.cancelled => '',
-    /* Routing failures never reach an auth form; handled by the routing surface. */
-    FailureKind.notRoutable || FailureKind.providerUnavailable =>
-      'Something went wrong. Please try again.',
+    /* Routing and trail failures never reach an auth form; each is handled by the
+       surface that can act on it. Listed rather than defaulted so a new kind still
+       forces a decision here. */
+    FailureKind.notRoutable ||
+    FailureKind.providerUnavailable ||
+    FailureKind.conflict ||
+    FailureKind.trailStopDuplicate ||
+    FailureKind.trailStopLimitReached ||
+    FailureKind.trailRouteStale => 'Something went wrong. Please try again.',
   };
 
   static String _throttled(int? retryAfterSeconds) {

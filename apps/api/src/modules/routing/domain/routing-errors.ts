@@ -105,3 +105,20 @@ export class InvalidRouteGeometryError extends AppError {
     });
   }
 }
+
+/**
+ * More points than one provider request can carry (PR-05, §17).
+ *
+ * A caller's mistake rather than an upstream failure, so it is a 400: the adapter
+ * publishes its coordinate ceiling, and Trilha's own limit on stops sits below it.
+ */
+export class TooManyWaypointsError extends AppError {
+  constructor(maximumWaypoints: number) {
+    super({
+      code: ErrorCode.INVALID_ROUTE_REQUEST,
+      message: 'That is more stops than a single route request can carry.',
+      httpStatus: HttpStatus.BAD_REQUEST,
+      details: { maximumWaypoints },
+    });
+  }
+}

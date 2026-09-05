@@ -104,6 +104,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'
 | `DISCOVERY_DEFAULT_MAX_DETOUR_MINUTES` / `DISCOVERY_MAX_DETOUR_MINUTES` | Detour ceiling and its maximum (defaults 30 / 120). Startup fails if the default exceeds the maximum. |
 | `DISCOVERY_MAX_RESULTS` | Candidates returned regardless of how many were evaluated (default 20). |
 | `RATE_LIMIT_DISCOVERY_*` | Hourly ceilings for discovery — stricter than routing, because each call costs strictly more. |
+| `RATE_LIMIT_TRAIL_*` | Ceilings for trail mutations, on a short window: each composition change spends a routing call, and a stuck retry loop is a burst rather than a steady rate. |
 
 ## Running the backend
 
@@ -345,6 +346,105 @@ with the extra time each adds; category chips re-run the search against the same
 Tapping a card highlights its marker on the map, and clearing the route clears the
 suggestions with it.
 
+## Trails
+
+```
+Flutter (Trail Builder)  ──▶  POST /trails                      (session required)
+                                   │
+                       read → propose → route → commit
+                                   │         │
+                                   │         └─ provider call, no transaction open
+                                   └─ compare-and-set on `revision`
+```
+
+The first thing a user **owns**. Everything before this — a route, a set of
+suggestions — is derived and disposable; a Trail is a decision someone made and asked
+to keep.
+
+- **A Trail is not a Route** (ADR-0016). Routing answers *how to get there*; a Trail
+  records *what was chosen*: which places, in which order. It keeps a **snapshot** of
+  what routing last said, so a road closing overnight cannot silently rewrite a saved
+  journey.
+- **A stop is always a resolved Place.** Never a coordinate, never free text. Tapping
+  somewhere with no Place leads to the contribution flow, not to a weaker stop.
+- **Order is explicit.** A 1-based contiguous `position`, never insertion time — a
+  reorder creates nothing, so `createdAt` stops describing the sequence the moment a
+  row is dragged.
+- **At most 15 stops.** The provider accepts 25 coordinates per request and origin and
+  destination take two; fifteen leaves margin, and is also as many as a person will
+  reorder by hand.
+- **Nothing is published.** `FINALIZED` means the user stopped composing. There is no
+  visibility flag, no slug, no share count — publication is a later PR with rules of
+  its own.
+
+### Lifecycle
+
+```
+DRAFT ──finalize──▶ FINALIZED ──any edit──▶ DRAFT
+  └──────────────── archive ─────────────────▶ ARCHIVED
+```
+
+Editing a finished Trail reopens it, which keeps "finished" an honest description of
+the current state rather than a one-way door.
+
+### Revisions, and why every mutation carries one
+
+Every Trail has a `revision`, incremented once per accepted change. Clients send the
+revision they are editing, and the server writes only if it still holds — as a
+predicate on the `UPDATE`, not a read followed by a write:
+
+```sql
+UPDATE trails SET revision = revision + 1, …
+ WHERE id = $1 AND owner_user_id = $2 AND revision = $expected
+```
+
+Two simultaneous edits at the same revision produce **one 200 and one 409**. A
+conflict is answered by reloading, never by merging: a lost update is worse than a
+retry because nobody finds out about it.
+
+`routeRevision` records which composition the stored route describes. Equal to
+`revision` means the drawn line matches; the API exposes this as `routeIsCurrent`.
+
+### The transaction boundary
+
+```
+1. read      the trail, owner-scoped, check the revision
+2. propose   the composition it would have — in memory
+3. route     ask the provider                    ← no transaction open
+4. commit    one short transaction: CAS, apply, snapshot
+```
+
+**No external call ever happens inside a transaction.** Holding one open across an
+HTTP request to Mapbox would pin a connection for as long as the provider takes, and a
+slow upstream would drain the pool rather than merely be slow.
+
+**A failed route writes nothing.** The composition change and the snapshot that
+describes it land together or not at all — a trail carrying a stop it has no route
+through would draw a line that omits somewhere the user chose to go.
+
+### Privacy
+
+This is the first place Trilha persists travel intent, and the distinction matters:
+
+| Not persisted | Persisted, because the user asked |
+| --- | --- |
+| Routes calculated and never saved | A Trail's origin, destination and stops |
+| Discovery queries and their results | Its route snapshot |
+| Device position used to centre a map | — |
+| Any GPS history or movement trace | — |
+
+Saving a Trail is someone choosing to keep a plan. That is a different thing from
+tracking, and the difference is that they asked. Logs carry counts and revisions only:
+no geometry, no coordinates, no trail or user id in a metric label.
+
+### Using it in the app
+
+Calculate a route, tap **Montar trilha**, then add stops from **Descobertas pelo
+caminho** or by searching. Drag to reorder — one request per completed drag, not one
+per frame — and the route redraws with the new totals. Everything saves as you go, so
+**Concluir** marks it finished rather than saving it. **Minhas trilhas** lists what you
+have built; opening one restores the whole builder from a single read.
+
 ## Authentication
 
 ```
@@ -543,6 +643,23 @@ corridor is wider than it needs to be.
 intended: evaluating more candidates than the spatial query can return means one of
 the two ceilings is a lie about what the pipeline does.
 
+**A trail mutation returns 409 `TRAIL_REVISION_CONFLICT`.** Working as intended: the
+trail changed since the revision you sent. Re-read it, look at what moved, and decide
+again — the server will not merge for you, because merging would have to guess intent.
+
+**A trail mutation returns 502 and nothing changed.** Also intended. The composition
+change and the route that describes it are written together or not at all, so a
+provider outage leaves the previous composition exactly as it was. Retry, or use
+**Atualizar rota** once the provider is back.
+
+**`Concluir` is disabled with `TRAIL_ROUTE_STALE`.** The stored route does not describe
+the current composition — the one way this happens is a trail created while the
+provider was unreachable. Tap **Atualizar rota** first.
+
+**Adding a stop returns 422 `TRAIL_STOP_PLACE_UNAVAILABLE`.** The Place is archived or
+does not exist. Trails already holding it keep it; it just cannot be added to a new
+one.
+
 ## Documentation
 
 | Document | Contents |
@@ -556,6 +673,8 @@ the two ceilings is a lie about what the pipeline does.
 | `docs/adr/ADR-0013-…` | Route geometry on the wire, and the corridor in metres |
 | `docs/adr/ADR-0014-…` | The discovery pipeline, and where money may be spent |
 | `docs/adr/ADR-0015-…` | Route relevance policy v1, weights and all |
+| `docs/adr/ADR-0016-…` | A Trail is composition, not calculation |
+| `docs/adr/ADR-0017-…` | Revisions, and never holding a transaction across a network call |
 
 ## Contributing
 

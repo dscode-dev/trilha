@@ -63,6 +63,10 @@ export interface RateLimitConfig {
   readonly discoveryWindowSeconds: number;
   readonly discoveryPerUser: number;
   readonly discoveryPerIp: number;
+  /** Trail composition changes, which each spend a routing call (§54). */
+  readonly trailWindowSeconds: number;
+  readonly trailMutationsPerUser: number;
+  readonly trailMutationsPerIp: number;
 }
 
 /**
@@ -177,6 +181,9 @@ export class AppConfig {
       discoveryWindowSeconds: env.RATE_LIMIT_DISCOVERY_WINDOW_SECONDS,
       discoveryPerUser: env.RATE_LIMIT_DISCOVERY_PER_USER,
       discoveryPerIp: env.RATE_LIMIT_DISCOVERY_PER_IP,
+      trailWindowSeconds: env.RATE_LIMIT_TRAIL_WINDOW_SECONDS,
+      trailMutationsPerUser: env.RATE_LIMIT_TRAIL_MUTATIONS_PER_USER,
+      trailMutationsPerIp: env.RATE_LIMIT_TRAIL_MUTATIONS_PER_IP,
     };
 
     this.observability = {

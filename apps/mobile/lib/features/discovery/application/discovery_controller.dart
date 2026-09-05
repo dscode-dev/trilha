@@ -49,25 +49,33 @@ class DiscoveryController extends Notifier<DiscoveryState> {
   ///
   /// Returns silently when there is no successful route: discovery cannot invent the
   /// journey it is supposed to search along.
-  Future<void> discover({List<String>? categories}) async {
+  Future<void> discover({
+    List<String>? categories,
+    int? maxDetourMinutes,
+  }) async {
     final RoutingState routing = ref.read(routingControllerProvider);
     final TrilhaRoute? route = routing.routeOrNull;
     if (route == null) return;
 
     final List<String> filters = categories ?? state.categories;
+    final int? detourCeiling = maxDetourMinutes ?? state.maxDetourMinutes;
 
     _inFlight?.cancel('superseded by a newer discovery request');
     final CancelToken cancelToken = CancelToken();
     _inFlight = cancelToken;
 
     final int sequence = ++_requestSequence;
-    state = DiscoveryLoading(categories: filters);
+    state = DiscoveryLoading(
+      categories: filters,
+      maxDetourMinutes: detourCeiling,
+    );
 
     try {
       final DiscoveryResult result = await _api.discover(
         origin: route.origin,
         destination: route.destination,
         categories: filters,
+        maxDetourMinutes: detourCeiling,
         cancelToken: cancelToken,
       );
 
@@ -76,11 +84,12 @@ class DiscoveryController extends Notifier<DiscoveryState> {
       if (!ref.mounted || sequence != _requestSequence) return;
 
       state = result.candidates.isEmpty
-          ? DiscoveryEmpty(categories: filters)
+          ? DiscoveryEmpty(categories: filters, maxDetourMinutes: detourCeiling)
           : DiscoverySuccess(
               candidates: result.candidates,
               policyVersion: result.policyVersion,
               categories: filters,
+              maxDetourMinutes: detourCeiling,
             );
 
       /* Counts and the policy version are safe to record. The route, the categories
@@ -101,7 +110,11 @@ class DiscoveryController extends Notifier<DiscoveryState> {
         'Discovery failed',
         context: <String, Object?>{'kind': failure.kind.name},
       );
-      state = DiscoveryFailure(failure: failure, categories: filters);
+      state = DiscoveryFailure(
+        failure: failure,
+        categories: filters,
+        maxDetourMinutes: detourCeiling,
+      );
     }
   }
 
@@ -111,6 +124,14 @@ class DiscoveryController extends Notifier<DiscoveryState> {
        backend derives the route from the endpoints either way, and the user has not
        changed where they are going. */
     await discover(categories: categories);
+  }
+
+  /// Sets how much extra time the user will accept, and re-runs (§37).
+  ///
+  /// A filter on suggestions, not a constraint on the trail: a place beyond this
+  /// ceiling can still be added by hand, it just is not offered.
+  Future<void> setMaxDetourMinutes(int minutes) async {
+    await discover(maxDetourMinutes: minutes);
   }
 
   /// Toggles one category, which is how the chips behave.

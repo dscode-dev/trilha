@@ -24,6 +24,18 @@ export interface RoutingRequest {
   readonly origin: RoutePoint;
   readonly destination: RoutePoint;
   /**
+   * Intermediate points, visited in the order given (PR-05, §15, §16).
+   *
+   * The provider is told *where* to go and in *what order*; it never chooses. Trilha
+   * has no optimiser and does not want one here — the sequence is the user's
+   * composition, and reordering it to save four minutes would silently discard the
+   * decision they made.
+   *
+   * Routing still knows nothing about Trails. It receives ordered points; that they
+   * came from a `TrailStop` is not a fact this layer needs (§16).
+   */
+  readonly waypoints?: readonly RoutePoint[] | undefined;
+  /**
    * Only driving exists in V1 (§29). Modelled because providers require it on the
    * wire, and because a second mode is a value here rather than a new code path.
    */

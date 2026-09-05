@@ -9,6 +9,7 @@ import { IdentityModule } from './modules/identity/identity.module.js';
 import { PlacesModule } from './modules/places/places.module.js';
 import { RoutingModule } from './modules/routing/routing.module.js';
 import { DiscoveryModule } from './modules/discovery/discovery.module.js';
+import { TrailsModule } from './modules/trails/trails.module.js';
 import { RequestIdMiddleware } from './common/http/request-id.middleware.js';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter.js';
 import { NotFoundModule } from './common/http/not-found.module.js';
@@ -31,6 +32,7 @@ import { NotFoundModule } from './common/http/not-found.module.js';
     PlacesModule,
     RoutingModule,
     DiscoveryModule,
+    TrailsModule,
     /* Last: its wildcard route must not shadow a real one. */
     NotFoundModule,
   ],

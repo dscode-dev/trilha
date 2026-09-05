@@ -132,6 +132,12 @@ export const envSchema = z.object({
   RATE_LIMIT_DISCOVERY_PER_USER: z.coerce.number().int().min(1).default(20),
   RATE_LIMIT_DISCOVERY_PER_IP: z.coerce.number().int().min(1).default(60),
 
+  /* Trail mutations each cost a routing call; some cost two. Bounded on a short
+     window, because a stuck retry loop is a burst rather than a steady rate (§54). */
+  RATE_LIMIT_TRAIL_WINDOW_SECONDS: z.coerce.number().int().min(10).default(60),
+  RATE_LIMIT_TRAIL_MUTATIONS_PER_USER: z.coerce.number().int().min(1).default(30),
+  RATE_LIMIT_TRAIL_MUTATIONS_PER_IP: z.coerce.number().int().min(1).default(90),
+
   LOG_LEVEL: z.enum(LOG_LEVELS).default('info'),
   /** Human-readable log output. Intended for local development only. */
   LOG_PRETTY: booleanFromEnv(false),

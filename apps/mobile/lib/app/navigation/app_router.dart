@@ -6,6 +6,8 @@ import '../../features/auth/application/auth_providers.dart';
 import '../../features/auth/application/auth_state.dart';
 import '../../features/auth/presentation/auth_routes.dart';
 import '../../features/map/presentation/map_screen.dart';
+import '../../features/trails/presentation/my_trails_screen.dart';
+import '../../features/trails/presentation/trail_routes.dart';
 import '../../features/auth/presentation/sign_in_screen.dart';
 import '../../features/auth/presentation/sign_up_screen.dart';
 import '../../features/profile/presentation/change_password_screen.dart';
@@ -69,7 +71,19 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AuthRoutes.homePath,
         name: AuthRoutes.homeName,
-        builder: (context, state) => const MapScreen(),
+        builder: (context, state) =>
+            MapScreen(resumeTrailId: state.uri.queryParameters['trail']),
+      ),
+      GoRoute(
+        path: TrailRoutes.listPath,
+        name: TrailRoutes.listName,
+        /* Opening a trail pushes the map with the builder already restored from a
+           single detail read — there is no separate builder screen to keep in sync
+           with the map (§69, §116). */
+        builder: (context, state) => MyTrailsScreen(
+          onOpen: (String trailId) =>
+              context.go('${AuthRoutes.homePath}?trail=\$trailId'),
+        ),
       ),
       GoRoute(
         path: AuthRoutes.profilePath,

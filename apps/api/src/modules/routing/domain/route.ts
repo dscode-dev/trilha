@@ -84,6 +84,13 @@ export interface Route {
   readonly bounds: RouteBounds;
   readonly legs: readonly RouteLeg[];
   readonly corridor: RouteCorridor | null;
+  /**
+   * Which provider computed this, by name (PR-05, §18).
+   *
+   * Non-sensitive attribution — never a URL and never a credential. A Trail persists
+   * it so that a snapshot saved today is attributable after a change of supplier.
+   */
+  readonly provider: string;
 }
 
 /**

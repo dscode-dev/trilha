@@ -90,6 +90,43 @@ class ApiClient {
     ),
   );
 
+  Future<T> put<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) => _send<T>(
+    () => _dio.put<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    ),
+  );
+
+  /// DELETE with an optional body.
+  ///
+  /// A body on DELETE is unusual but deliberate here: trail mutations carry an
+  /// `expectedRevision`, and putting it in a query string would make a write's
+  /// concurrency token look like a filter.
+  Future<T> delete<T>(
+    String path, {
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+  }) => _send<T>(
+    () => _dio.delete<T>(
+      path,
+      data: data,
+      queryParameters: queryParameters,
+      options: options,
+      cancelToken: cancelToken,
+    ),
+  );
+
   /// Runs [request], converting every failure into an [AppException].
   Future<T> _send<T>(Future<Response<T>> Function() request) async {
     try {

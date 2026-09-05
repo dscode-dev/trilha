@@ -5,6 +5,7 @@ import { parseLineString, type RouteLeg } from '../domain/route.js';
 import {
   InvalidRouteGeometryError,
   RouteNotFoundError,
+  TooManyWaypointsError,
   RoutingProviderRateLimitedError,
   RoutingProviderTimeoutError,
   RoutingProviderUnavailableError,
@@ -35,6 +36,16 @@ interface MapboxDirectionsResponse {
 }
 
 const PROVIDER_NAME = 'mapbox-directions-v5';
+
+/**
+ * Coordinates the driving profile accepts in one Directions request.
+ *
+ * Verified against the current Mapbox documentation at implementation time: "Requests
+ * using this profile accept up to 25 coordinates." Origin and destination occupy two
+ * of them, so a request may carry 23 intermediate waypoints. Trilha's own ceiling on
+ * stops is lower, and deliberately so (ADR-0016).
+ */
+export const MAPBOX_DIRECTIONS_COORDINATE_LIMIT = 25;
 
 @Injectable()
 export class MapboxRoutingProvider implements RoutingProvider {
@@ -88,9 +99,19 @@ export class MapboxRoutingProvider implements RoutingProvider {
    * The URL carries the access token, which is why it is never logged (§57).
    */
   private buildUrl(request: RoutingRequest): string {
-    const { origin, destination } = request;
+    const waypoints = request.waypoints ?? [];
+    /* Order is the caller's decision and is preserved exactly: origin, then each
+       waypoint as given, then destination (§15). */
+    const points = [request.origin, ...waypoints, request.destination];
+
+    if (points.length > MAPBOX_DIRECTIONS_COORDINATE_LIMIT) {
+      /* A caller error, not a provider one — the ceiling is published on the port's
+         adapter and Trilha's own stop limit sits below it. */
+      throw new TooManyWaypointsError(MAPBOX_DIRECTIONS_COORDINATE_LIMIT - 2);
+    }
+
     /* Mapbox takes longitude,latitude — the opposite of how people say it. */
-    const coordinates = `${String(origin.longitude)},${String(origin.latitude)};${String(destination.longitude)},${String(destination.latitude)}`;
+    const coordinates = points.map((p) => `${String(p.longitude)},${String(p.latitude)}`).join(';');
 
     const url = new URL(
       `https://api.mapbox.com/directions/v5/mapbox/driving/${encodeURIComponent(coordinates)}`,

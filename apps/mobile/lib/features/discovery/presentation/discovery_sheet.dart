@@ -53,12 +53,70 @@ class DiscoverySheet extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
+              const _DetourFilter(),
+              const SizedBox(height: AppSpacing.sm),
               const _CategoryFilters(),
               const SizedBox(height: AppSpacing.sm),
               Flexible(child: _DiscoveryBody(onCandidateTap: onCandidateTap)),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// How much extra time the user will accept (§37, §61).
+///
+/// Three coarse options rather than a slider: the difference between 28 and 32 minutes
+/// is not a judgement anyone makes, and every change costs a route calculation and a
+/// travel-cost matrix upstream.
+///
+/// This filters *suggestions* only. A place beyond the ceiling can still be added to a
+/// trail by hand — it simply is not offered.
+class _DetourFilter extends ConsumerWidget {
+  const _DetourFilter();
+
+  static const List<int> _options = <int>[15, 30, 60];
+  static const int _serverDefault = 30;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final DiscoveryState state = ref.watch(discoveryControllerProvider);
+    final DiscoveryController controller = ref.read(
+      discoveryControllerProvider.notifier,
+    );
+    final int selected = state.maxDetourMinutes ?? _serverDefault;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Row(
+        children: <Widget>[
+          Text(
+            'Desvio até',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: <ButtonSegment<int>>[
+                for (final int minutes in _options)
+                  ButtonSegment<int>(
+                    value: minutes,
+                    label: Text('$minutes min'),
+                  ),
+              ],
+              selected: <int>{selected},
+              onSelectionChanged: state.isLoading
+                  ? null
+                  : (Set<int> choice) =>
+                        unawaited(controller.setMaxDetourMinutes(choice.first)),
+            ),
+          ),
+        ],
       ),
     );
   }

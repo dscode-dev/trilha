@@ -6,6 +6,7 @@ import { PlaceAuditRepository } from './infrastructure/place-audit.repository.js
 import { CreatePlaceUseCase } from './application/create-place.use-case.js';
 import { QueryPlacesUseCase } from './application/query-places.use-case.js';
 import { PlacesAlongRouteQuery } from './application/places-along-route.query.js';
+import { PlaceLookupQuery } from './application/place-lookup.query.js';
 import { PlacesController } from './presentation/places.controller.js';
 
 /**
@@ -24,9 +25,11 @@ import { PlacesController } from './presentation/places.controller.js';
     CreatePlaceUseCase,
     QueryPlacesUseCase,
     PlacesAlongRouteQuery,
+    PlaceLookupQuery,
   ],
-  /* Discovery (PR-04) asks a spatial question about Places. It gets exactly that one
-     read capability — not the repository, which would also grant writes. */
-  exports: [PlacesAlongRouteQuery],
+  /* Other contexts get exactly the read capability they need, never the repository,
+     which would also grant writes: Discovery (PR-04) asks a spatial question, Trails
+     (PR-05) resolves a Place id. */
+  exports: [PlacesAlongRouteQuery, PlaceLookupQuery],
 })
 export class PlacesModule {}

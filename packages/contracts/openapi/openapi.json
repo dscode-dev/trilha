@@ -872,6 +872,630 @@
           "discovery"
         ]
       }
+    },
+    "/api/v1/trails": {
+      "post": {
+        "description": "Creates a draft and routes it in the same call. If the routing provider is unavailable the trail is still created without a route snapshot — a draft the user can return to is worth more than an error that loses their two points. `routeIsCurrent` says which happened.",
+        "operationId": "TrailsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrailRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Start a trail between two points",
+        "tags": [
+          "trails"
+        ]
+      },
+      "get": {
+        "description": "Newest first, keyset-paginated. Summaries only — a list of trails must not ship a LineString per row to a phone.",
+        "operationId": "TrailsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailListResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List my trails",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}": {
+      "get": {
+        "description": "Everything the builder needs to restore itself from cold: endpoints, ordered stops, the route snapshot, and the revision to send with the next mutation.",
+        "operationId": "TrailsController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trail, or it belongs to someone else — deliberately the same answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Read one trail",
+        "tags": [
+          "trails"
+        ]
+      },
+      "patch": {
+        "description": "Re-routes the whole composition and recomputes the A → B baseline.",
+        "operationId": "TrailsController_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchTrailRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change a trail’s endpoints",
+        "tags": [
+          "trails"
+        ]
+      },
+      "delete": {
+        "description": "Permanent, along with its stops. Acceptable because nothing else references a trail yet — no saves, no shares, no comments.",
+        "operationId": "TrailsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a trail",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}/stops": {
+      "post": {
+        "description": "A stop is always a resolved Place. The trail is re-routed through it, in position, before anything is written: if routing fails, nothing changes.",
+        "operationId": "TrailsController_addStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddStopRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict, or that place is already a stop.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Stop limit reached, or the place cannot be added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add a stop",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}/stops/{stopId}": {
+      "delete": {
+        "description": "Closes the gap and re-routes.",
+        "operationId": "TrailsController_removeStop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a stop",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}/stops/order": {
+      "put": {
+        "description": "Takes the whole set in the new order. One call per completed drag — not one per frame — and one recalculation.",
+        "operationId": "TrailsController_reorder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderStopsRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The order omits a stop, repeats one, or names one from another trail.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reorder stops",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}/recalculate": {
+      "post": {
+        "description": "Re-asks the provider for the same composition, and refreshes the baseline with it.",
+        "operationId": "TrailsController_recalculate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionOnlyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Refresh the route",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}/finalize": {
+      "post": {
+        "description": "Says the user is done composing. **Not publication** — nobody else can see a trail. Requires a route that matches the current composition. Editing a finalized trail returns it to DRAFT.",
+        "operationId": "TrailsController_finalize",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionOnlyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The route does not describe the current composition.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark a trail finished",
+        "tags": [
+          "trails"
+        ]
+      }
+    },
+    "/api/v1/trails/{id}/archive": {
+      "post": {
+        "description": "Keeps it, stops listing it by default. The reversible alternative to deleting.",
+        "operationId": "TrailsController_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionOnlyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailDetailDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive a trail",
+        "tags": [
+          "trails"
+        ]
+      }
     }
   },
   "info": {
@@ -1076,6 +1700,12 @@
               "PROVIDER_TIMEOUT",
               "PROVIDER_UNAVAILABLE",
               "PROVIDER_RATE_LIMITED",
+              "TRAIL_REVISION_CONFLICT",
+              "TRAIL_STOP_LIMIT_REACHED",
+              "TRAIL_STOP_DUPLICATE",
+              "INVALID_TRAIL_STOP_ORDER",
+              "TRAIL_ROUTE_STALE",
+              "TRAIL_STOP_PLACE_UNAVAILABLE",
               "INTERNAL_ERROR",
               "SERVICE_UNAVAILABLE",
               "DEPENDENCY_UNAVAILABLE"
@@ -2038,6 +2668,493 @@
           "policyVersion",
           "candidates",
           "diagnostics"
+        ]
+      },
+      "TrailEndpointDto": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90,
+            "example": -8.0631
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180,
+            "example": -34.8711
+          },
+          "placeId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "nullable": true,
+            "example": "Marco Zero"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "placeId",
+          "label"
+        ]
+      },
+      "CreateTrailRequestDto": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/TrailEndpointDto"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/TrailEndpointDto"
+          }
+        },
+        "required": [
+          "origin",
+          "destination"
+        ]
+      },
+      "TrailStopDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "placeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "position": {
+            "type": "number",
+            "minimum": 1,
+            "description": "1-based visiting order, contiguous."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "DISCOVERY",
+              "SEARCH",
+              "MANUAL"
+            ]
+          },
+          "placeName": {
+            "type": "string",
+            "example": "Mirante do Alto da Sé"
+          },
+          "placeCategoryId": {
+            "type": "string",
+            "example": "LANDMARK"
+          },
+          "latitude": {
+            "type": "number",
+            "example": -7.9939
+          },
+          "longitude": {
+            "type": "number",
+            "example": -34.8455
+          }
+        },
+        "required": [
+          "id",
+          "placeId",
+          "position",
+          "source",
+          "placeName",
+          "placeCategoryId",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "TrailGeometryDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "LineString"
+            ]
+          },
+          "coordinates": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "description": "GeoJSON positions as [longitude, latitude]."
+          }
+        },
+        "required": [
+          "type",
+          "coordinates"
+        ]
+      },
+      "TrailBoundsDto": {
+        "type": "object",
+        "properties": {
+          "north": {
+            "type": "number"
+          },
+          "south": {
+            "type": "number"
+          },
+          "east": {
+            "type": "number"
+          },
+          "west": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "north",
+          "south",
+          "east",
+          "west"
+        ]
+      },
+      "TrailRouteSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "geometry": {
+            "$ref": "#/components/schemas/TrailGeometryDto"
+          },
+          "bounds": {
+            "$ref": "#/components/schemas/TrailBoundsDto"
+          },
+          "distanceMeters": {
+            "type": "number",
+            "example": 145000
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 7860
+          },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "number",
+            "example": 7,
+            "description": "The trail revision this route describes. Equal to the trail revision means current."
+          }
+        },
+        "required": [
+          "geometry",
+          "bounds",
+          "distanceMeters",
+          "durationSeconds",
+          "calculatedAt",
+          "revision"
+        ]
+      },
+      "TrailBaseRouteDto": {
+        "type": "object",
+        "properties": {
+          "distanceMeters": {
+            "type": "number",
+            "example": 121000
+          },
+          "durationSeconds": {
+            "type": "number",
+            "example": 6480
+          },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "distanceMeters",
+          "durationSeconds",
+          "calculatedAt"
+        ]
+      },
+      "TrailDetourDto": {
+        "type": "object",
+        "properties": {
+          "extraDistanceMeters": {
+            "type": "number",
+            "example": 24000
+          },
+          "extraDurationSeconds": {
+            "type": "number",
+            "example": 1380
+          }
+        },
+        "required": [
+          "extraDistanceMeters",
+          "extraDurationSeconds"
+        ]
+      },
+      "TrailDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "FINALIZED",
+              "ARCHIVED"
+            ]
+          },
+          "origin": {
+            "$ref": "#/components/schemas/TrailEndpointDto"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/TrailEndpointDto"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrailStopDto"
+            }
+          },
+          "revision": {
+            "type": "number",
+            "example": 7,
+            "description": "Send this back as expectedRevision on the next mutation."
+          },
+          "route": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TrailRouteSnapshotDto"
+              }
+            ]
+          },
+          "baseRoute": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TrailBaseRouteDto"
+              }
+            ]
+          },
+          "detour": {
+            "nullable": true,
+            "description": "What the stops add over the same endpoints with none. Null when either snapshot is missing — \"not measured\" is not the same claim as \"no detour\".",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TrailDetourDto"
+              }
+            ]
+          },
+          "routeIsCurrent": {
+            "type": "boolean",
+            "description": "Whether the stored route describes the composition as it now stands."
+          },
+          "maxStops": {
+            "type": "number",
+            "example": 15,
+            "description": "Server ceiling on stops."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finalizedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "origin",
+          "destination",
+          "stops",
+          "revision",
+          "route",
+          "baseRoute",
+          "detour",
+          "routeIsCurrent",
+          "maxStops",
+          "createdAt",
+          "updatedAt",
+          "finalizedAt"
+        ]
+      },
+      "TrailSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "FINALIZED",
+              "ARCHIVED"
+            ]
+          },
+          "originLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "destinationLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "stopCount": {
+            "type": "number",
+            "example": 3
+          },
+          "distanceMeters": {
+            "type": "number",
+            "nullable": true,
+            "example": 145000
+          },
+          "durationSeconds": {
+            "type": "number",
+            "nullable": true,
+            "example": 7860
+          },
+          "revision": {
+            "type": "number",
+            "example": 7
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "originLabel",
+          "destinationLabel",
+          "stopCount",
+          "distanceMeters",
+          "durationSeconds",
+          "revision",
+          "updatedAt"
+        ]
+      },
+      "TrailListResponseDto": {
+        "type": "object",
+        "properties": {
+          "trails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrailSummaryDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Pass as `cursor` for the next page. Null on the last page."
+          }
+        },
+        "required": [
+          "trails",
+          "nextCursor"
+        ]
+      },
+      "PatchTrailRequestDto": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/TrailEndpointDto"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/TrailEndpointDto"
+          },
+          "expectedRevision": {
+            "type": "number",
+            "minimum": 1,
+            "example": 2
+          }
+        },
+        "required": [
+          "expectedRevision"
+        ]
+      },
+      "AddStopRequestDto": {
+        "type": "object",
+        "properties": {
+          "placeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A stop is always a resolved Place."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "DISCOVERY",
+              "SEARCH",
+              "MANUAL"
+            ],
+            "description": "Where the addition came from. Provenance of the composition, not a quality signal."
+          },
+          "expectedRevision": {
+            "type": "number",
+            "minimum": 1,
+            "example": 3,
+            "description": "The revision the client is editing. A mismatch returns 409 rather than overwriting whatever changed in the meantime."
+          }
+        },
+        "required": [
+          "placeId",
+          "source",
+          "expectedRevision"
+        ]
+      },
+      "ReorderStopsRequestDto": {
+        "type": "object",
+        "properties": {
+          "stopIds": {
+            "maxItems": 15,
+            "description": "Every stop on the trail, in the new visiting order.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expectedRevision": {
+            "type": "number",
+            "minimum": 1,
+            "example": 5
+          }
+        },
+        "required": [
+          "stopIds",
+          "expectedRevision"
+        ]
+      },
+      "RevisionOnlyRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedRevision": {
+            "type": "number",
+            "minimum": 1,
+            "example": 5
+          }
+        },
+        "required": [
+          "expectedRevision"
         ]
       }
     }

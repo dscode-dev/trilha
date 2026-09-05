@@ -48,16 +48,17 @@ describe('OpenAPI document', () => {
    * Scope freeze.
    *
    * Each PR removes its own domain from this list as it ships it — identity in PR-01,
-   * places in PR-02, routing in PR-03 — and everything still frozen stays. The guard
-   * is what makes an accidentally-shipped route fail a build rather than pass review.
+   * places in PR-02, routing in PR-03, trails in PR-05 — and everything still frozen
+   * stays. The guard is what makes an accidentally-shipped route fail a build rather
+   * than pass review.
    *
-   * PR-04 removes nothing: discovery lives under its own prefix and never matched any
-   * of these, and `recommendation` is added because a discovery endpoint is the exact
-   * place someone would be tempted to promise personalisation that does not exist.
+   * `trail` leaves the list here, but publication does not follow it: `publish`,
+   * `share` and `comment` are added, because a Trail Builder is the exact place
+   * someone would be tempted to ship the social layer early (§72, §108).
    */
   it('exposes no endpoints for domains that are still frozen', () => {
     const frozen =
-      /(trail|review|rating|safety|event|suggestion|feed|badge|follower|recommendation)/i;
+      /(review|rating|safety|event|suggestion|feed|badge|follower|recommendation|publish|share|comment)/i;
     expect(Object.keys(document.paths).filter((path) => frozen.test(path))).toEqual([]);
   });
 
@@ -145,6 +146,69 @@ describe('OpenAPI document', () => {
        score is not one. */
     for (const forbidden of [/rating/i, /safety/i, /popular/i, /review/i, /vote/i]) {
       expect(fields.filter((field) => forbidden.test(field))).toEqual([]);
+    }
+  });
+
+  it('documents the trails domain introduced by PR-05', () => {
+    expect(Object.keys(document.paths)).toEqual(
+      expect.arrayContaining([
+        '/api/v1/trails',
+        '/api/v1/trails/{id}',
+        '/api/v1/trails/{id}/stops',
+        '/api/v1/trails/{id}/stops/{stopId}',
+        '/api/v1/trails/{id}/stops/order',
+        '/api/v1/trails/{id}/recalculate',
+        '/api/v1/trails/{id}/finalize',
+      ]),
+    );
+  });
+
+  it('requires a bearer token on every trail route (§53)', () => {
+    const trailPaths = Object.entries(document.paths).filter(([path]) =>
+      path.startsWith('/api/v1/trails'),
+    );
+
+    expect(trailPaths.length).toBeGreaterThan(0);
+    for (const [path, operations] of trailPaths) {
+      for (const [method, operation] of Object.entries(operations)) {
+        const security = (operation as { security?: unknown }).security ?? [];
+        expect(JSON.stringify(security), `${method} ${path}`).toMatch(/bearer/i);
+      }
+    }
+  });
+
+  it('documents the revision conflict every mutation can return (§25, §78)', () => {
+    const addStop = document.paths['/api/v1/trails/{id}/stops']?.post;
+
+    /* A client that cannot tell a conflict from a validation error will either
+       overwrite or give up; both are worse than reloading. */
+    expect(Object.keys(addStop?.responses ?? {})).toEqual(expect.arrayContaining(['409']));
+  });
+
+  it('never asks a client for a user id (§53)', () => {
+    const trailDocument = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(document.paths).filter(([path]) => path.startsWith('/api/v1/trails')),
+      ),
+    );
+
+    /* Ownership comes from the session. A userId in a request body would be an
+       invitation to edit someone else's trail. */
+    expect(trailDocument).not.toMatch(/"(ownerUserId|userId)"/);
+  });
+
+  it('exposes no publication, rating or safety field on a trail (§72, §108)', () => {
+    for (const schemaName of ['TrailDetailDto', 'TrailSummaryDto', 'TrailStopDto']) {
+      const schema = document.components?.schemas?.[schemaName] as
+        { properties?: Record<string, unknown> } | undefined;
+      const fields = Object.keys(schema?.properties ?? {});
+
+      for (const forbidden of [/public/i, /slug/i, /share/i, /comment/i, /rating/i, /safety/i]) {
+        expect(
+          fields.filter((field) => forbidden.test(field)),
+          schemaName,
+        ).toEqual([]);
+      }
     }
   });
 

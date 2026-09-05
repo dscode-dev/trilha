@@ -16,6 +16,22 @@ enum FailureKind {
   usernameAlreadyInUse,
   weakPassword,
   rateLimited,
+
+  /// The resource changed between reading it and writing to it (PR-05, §78).
+  ///
+  /// Never resolved by retrying the same write: the client reloads, sees what
+  /// changed, and decides again. A silent overwrite would lose someone's edit with
+  /// nothing to show it happened.
+  conflict,
+
+  /// That Place is already a stop on this trail (§33).
+  trailStopDuplicate,
+
+  /// The trail already holds as many stops as it may (§14).
+  trailStopLimitReached,
+
+  /// The stored route no longer describes the composition (§22).
+  trailRouteStale,
   sessionExpired,
   accountDisabled,
   networkUnavailable,
@@ -60,6 +76,13 @@ class AppFailure extends Equatable implements Exception {
         'TOO_MANY_REQUESTS' => FailureKind.rateLimited,
         'SESSION_EXPIRED' || 'INVALID_TOKEN' => FailureKind.sessionExpired,
         'ACCOUNT_DISABLED' => FailureKind.accountDisabled,
+        /* Trails (PR-05). */
+        'TRAIL_REVISION_CONFLICT' => FailureKind.conflict,
+        'TRAIL_STOP_DUPLICATE' => FailureKind.trailStopDuplicate,
+        'TRAIL_STOP_LIMIT_REACHED' => FailureKind.trailStopLimitReached,
+        'TRAIL_ROUTE_STALE' => FailureKind.trailRouteStale,
+        'INVALID_TRAIL_STOP_ORDER' ||
+        'TRAIL_STOP_PLACE_UNAVAILABLE' => FailureKind.validation,
         /* Routing (PR-03). */
         'ROUTE_NOT_FOUND' => FailureKind.notRoutable,
         'INVALID_ROUTE_REQUEST' => FailureKind.validation,

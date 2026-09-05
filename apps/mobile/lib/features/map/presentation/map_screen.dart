@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mapbox;
 
@@ -20,6 +21,12 @@ import '../../discovery/application/discovery_state.dart';
 import '../../discovery/domain/route_candidate.dart';
 import '../../discovery/presentation/candidate_overlay.dart';
 import '../../discovery/presentation/discovery_sheet.dart';
+import '../../trails/application/trail_providers.dart';
+import '../../trails/application/trail_state.dart';
+import '../../trails/domain/trail.dart';
+import '../../trails/presentation/trail_builder_sheet.dart';
+import '../../trails/presentation/trail_stop_overlay.dart';
+import '../../trails/presentation/trail_routes.dart';
 import '../../routing/application/routing_controller.dart';
 import '../../routing/application/routing_providers.dart';
 import '../../routing/application/routing_state.dart';
@@ -35,7 +42,13 @@ import 'map_unavailable.dart';
 /// arrives as a bottom sheet. No app bar, no dashboard, no cards competing with the
 /// thing the user came to look at.
 class MapScreen extends ConsumerStatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({this.resumeTrailId, super.key});
+
+  /// A saved trail to reopen, from `?trail=`.
+  ///
+  /// Resuming needs nothing but this id: the builder rebuilds itself from one detail
+  /// read, with no memory of the session that created the trail (§69, §116).
+  final String? resumeTrailId;
 
   @override
   ConsumerState<MapScreen> createState() => _MapScreenState();
@@ -46,6 +59,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   MapCamera? _camera;
   RouteOverlay? _routeOverlay;
   CandidateOverlay? _candidateOverlay;
+  TrailStopOverlay? _trailStopOverlay;
 
   /// Which endpoint the next selection fills. Null when not building a route.
   _EndpointSlot? _awaitingSelection;
@@ -68,6 +82,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             .refreshLocationPermission(),
       ),
     );
+
+    final String? resumeTrailId = widget.resumeTrailId;
+    if (resumeTrailId != null) {
+      unawaited(
+        Future<void>.microtask(
+          () => ref.read(trailControllerProvider.notifier).open(resumeTrailId),
+        ),
+      );
+    }
   }
 
   Future<void> _onMapCreated(mapbox.MapboxMap map) async {
@@ -81,6 +104,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     /* Candidates get their own manager, so clearing them never touches a Place the
        user contributed or an endpoint the route drew (§56). */
     _candidateOverlay = MapboxCandidateOverlay(
+      markers: await map.annotations.createPointAnnotationManager(),
+      markerColor: AppColors.brandGreen.toARGB32(),
+    );
+
+    /* A third manager, so a trail's stops, the discovery candidates and the Places
+       each clear independently (§60). */
+    _trailStopOverlay = MapboxTrailStopOverlay(
       markers: await map.annotations.createPointAnnotationManager(),
       markerColor: AppColors.brandGreen.toARGB32(),
     );
@@ -374,6 +404,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final MapState state = ref.watch(mapControllerProvider);
     final RoutingState routing = ref.watch(routingControllerProvider);
     final DiscoveryState discovery = ref.watch(discoveryControllerProvider);
+    final TrailState trailState = ref.watch(trailControllerProvider);
     /* Route mode starts at the moment the user asks for it, before an endpoint
        exists, so the panel is there to receive the first selection. */
     final bool routeMode = routing.isActive || _awaitingSelection != null;
@@ -393,6 +424,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     ) {
       if (previous?.routeOrNull == next.routeOrNull) return;
       unawaited(_syncRoute(next.routeOrNull));
+    });
+
+    /* A trail's stops and its line follow its state, so closing the builder or
+       reordering a stop is reflected on the map without a widget commanding it. */
+    ref.listen<TrailState>(trailControllerProvider, (
+      TrailState? previous,
+      TrailState next,
+    ) {
+      if (previous?.trail?.stops != next.trail?.stops) {
+        unawaited(
+          _trailStopOverlay?.showStops(next.trail?.stops ?? <TrailStop>[]),
+        );
+      }
+      if (previous?.trail?.route != next.trail?.route) {
+        unawaited(_syncTrailRoute(next.trail));
+      }
     });
 
     /* The same discipline for candidates: markers follow the discovery state, so a
@@ -453,16 +500,27 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
           /* Anchored to the bottom rather than pushed into a modal: the detour only
              means something next to the route it is measured against (§55). */
-          if (discovery.isActive)
+          if (trailState.hasTrail || discovery.isActive)
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
                 ),
-                child: DiscoverySheet(onCandidateTap: _focusOnCandidate),
+                /* One sheet at a time. While a trail is open the builder is what the
+                   user is working in; discovery becomes a way to add to it, reached
+                   from "Adicionar parada" (§63). */
+                child: trailState.hasTrail
+                    ? TrailBuilderSheet(
+                        onAddStop: () => unawaited(_addStopToTrail()),
+                        onClose: () =>
+                            ref.read(trailControllerProvider.notifier).close(),
+                        onStopTap: (TrailStop stop) =>
+                            unawaited(_camera?.moveTo(stop.location)),
+                      )
+                    : DiscoverySheet(onCandidateTap: _focusOnCandidate),
               ),
             ),
 
@@ -506,13 +564,42 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                    upstream, so it must never fire on an incidental rebuild (§62,
                    §65). */
                 if (routing.routeOrNull != null &&
-                    !discovery.isActive) ...<Widget>[
+                    !discovery.isActive &&
+                    !trailState.hasTrail) ...<Widget>[
                   FloatingActionButton.extended(
                     heroTag: 'discover-along-route',
                     icon: const Icon(Icons.explore_outlined),
                     label: const Text('Descobertas'),
                     onPressed: () => unawaited(
                       ref.read(discoveryControllerProvider.notifier).discover(),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+
+                if (!trailState.hasTrail) ...<Widget>[
+                  FloatingActionButton.small(
+                    heroTag: 'my-trails',
+                    tooltip: 'Minhas trilhas',
+                    onPressed: () => context.push(TrailRoutes.listPath),
+                    child: const Icon(Icons.bookmark_border),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+
+                /* A trail is created once the user asks for one, never when the screen
+                   opens — otherwise browsing the map would leave a trail of empty
+                   drafts behind (§67). */
+                if (routing.routeOrNull != null &&
+                    !trailState.hasTrail) ...<Widget>[
+                  FloatingActionButton.extended(
+                    heroTag: 'start-trail',
+                    icon: const Icon(Icons.route_outlined),
+                    label: const Text('Montar trilha'),
+                    onPressed: () => unawaited(
+                      ref
+                          .read(trailControllerProvider.notifier)
+                          .createFromRoute(),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -546,6 +633,134 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Draws the trail's own line, replacing whatever the route overlay was showing.
+  Future<void> _syncTrailRoute(Trail? trail) async {
+    final RouteOverlay? overlay = _routeOverlay;
+    final TrailRoute? route = trail?.route;
+    if (overlay == null) return;
+
+    if (trail == null || route == null) {
+      await overlay.clearRoute();
+      return;
+    }
+
+    /* The trail's stored geometry, not a fresh calculation: this is what the user
+       saved, and re-routing on open would quietly change it (§69). */
+    await overlay.drawRoute(
+      TrilhaRoute(
+        origin: RouteEndpoint(
+          position: trail.origin.position,
+          placeId: trail.origin.placeId,
+          label: trail.origin.label,
+        ),
+        destination: RouteEndpoint(
+          position: trail.destination.position,
+          placeId: trail.destination.placeId,
+          label: trail.destination.label,
+        ),
+        geometry: route.geometry,
+        distanceMeters: route.distanceMeters,
+        durationSeconds: route.durationSeconds,
+        bounds: route.bounds,
+        legs: const <RouteLeg>[],
+      ),
+    );
+  }
+
+  /// Offers the ways a stop can be added (§63, §65).
+  Future<void> _addStopToTrail() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.explore_outlined),
+              title: const Text('Descobertas pelo caminho'),
+              subtitle: const Text('Lugares que somam pouco tempo à viagem'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(_addFromDiscovery());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.search),
+              title: const Text('Buscar um lugar'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(_addFromSearch());
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Discovery as a source of stops (§34, §63, §64).
+  Future<void> _addFromDiscovery() async {
+    final DiscoveryState discovery = ref.read(discoveryControllerProvider);
+    if (discovery is DiscoveryIdle) {
+      unawaited(ref.read(discoveryControllerProvider.notifier).discover());
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(sheetContext).size.height * 0.7,
+        ),
+        child: DiscoverySheet(
+          onCandidateTap: (RouteCandidate candidate) {
+            Navigator.of(sheetContext).pop();
+            /* Discovery never writes a trail itself; the intent travels through the
+               trail controller, which owns the mutation (§34). */
+            unawaited(
+              ref
+                  .read(trailControllerProvider.notifier)
+                  .addStop(candidate.place.id, TrailStopSource.discovery),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// The Places search as a source of stops (§35, §65).
+  Future<void> _addFromSearch() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            /* The same search the map uses. A second one would drift from it the first
+               time either changed (§65). */
+            child: PlaceSearchBar(
+              onSelected: (PlaceListItem place) {
+                Navigator.of(sheetContext).pop();
+                unawaited(
+                  ref
+                      .read(trailControllerProvider.notifier)
+                      .addStop(place.id, TrailStopSource.search),
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }

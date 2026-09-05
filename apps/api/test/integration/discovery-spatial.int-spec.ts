@@ -275,10 +275,13 @@ describe('Discovery spatial retrieval (PostGIS)', () => {
       });
 
     it('reaches the GIST index through ST_DWithin against the line', async () => {
+      /* The spatial predicate alone. With `status` in the WHERE clause the planner can
+         satisfy the query from `places_status_idx` instead, and the test would then be
+         reporting which index the planner *preferred* rather than whether the spatial
+         one can serve `ST_DWithin` at all — which is the thing that must not regress. */
       const plan = await planFor(sql`
         SELECT p.id FROM places p
-         WHERE p.status = 'ACTIVE'
-           AND ST_DWithin(
+         WHERE ST_DWithin(
                  p.location,
                  ST_SetSRID(ST_GeomFromGeoJSON(${route}), 4326)::geography,
                  5000

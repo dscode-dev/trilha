@@ -37,3 +37,11 @@ process.env['ROUTING_CORRIDOR_DEFAULT_METERS'] = '5000';
 process.env['ROUTING_CORRIDOR_MAX_METERS'] = '20000';
 process.env['RATE_LIMIT_ROUTING_PER_USER'] = '10000';
 process.env['RATE_LIMIT_ROUTING_PER_IP'] = '10000';
+
+/* Trail mutations, likewise. The builder suite performs hundreds of composition
+   changes to exercise ordering, limits and concurrency, and throttling them would be
+   testing the limiter rather than the builder. Discovery deliberately keeps its real
+   ceiling, because its suite asserts on it. */
+process.env['RATE_LIMIT_TRAIL_WINDOW_SECONDS'] = '900';
+process.env['RATE_LIMIT_TRAIL_MUTATIONS_PER_USER'] = '10000';
+process.env['RATE_LIMIT_TRAIL_MUTATIONS_PER_IP'] = '10000';
